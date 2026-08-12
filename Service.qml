@@ -19,7 +19,6 @@ QtObject {
   property var folderStatuses: ({})
 
   property string installationState: "checking"
-  property string installationMethod: ""
   property string installationLabel: "Checking"
   property string executablePath: ""
   property bool serviceAvailable: false
@@ -27,7 +26,6 @@ QtObject {
   property bool operationRunning: false
   property bool packageRefreshing: false
   property bool packageActionRunning: false
-  property string packageAction: ""
   property string packageStatus: ""
   property string packageError: ""
   property string controlError: ""
@@ -282,7 +280,6 @@ QtObject {
     }
 
     installationState = state
-    installationMethod = String(data.method || "")
     installationLabel = String(data.label || "Unavailable")
     executablePath = String(data.executable || "")
     serviceAvailable = data.serviceAvailable === true
@@ -304,7 +301,6 @@ QtObject {
     if (packageActionRunning && _operationSeen && !operationRunning) {
       packageActionRunning = false
       packageStatus = "Installation terminal closed"
-      packageAction = ""
       _operationSeen = false
       operationPollTimer.stop()
       packageMessageTimer.restart()
@@ -316,49 +312,27 @@ QtObject {
     return true
   }
 
-  function installSyncthing(method, value, installPath, sourcePath) {
-    runPackageAction("install", method, value, installPath, sourcePath)
-  }
-
-  function updateSyncthing() {
-    runPackageAction("update", "", "", "", "")
+  function installSyncthing() {
+    runPackageAction("install")
   }
 
   function uninstallSyncthing() {
-    runPackageAction("uninstall", "", "", "", "")
+    runPackageAction("uninstall")
   }
 
-  function runPackageAction(action, method, value, installPath, sourcePath) {
-    var githubChange = action === "install"
-      && installationState === "managed"
-      && (installationMethod === "release" || installationMethod === "git")
-      && (method === "release" || method === "git")
-    var allowed = action === "install" ? canInstall || githubChange
-      : action === "update"
-        ? installationState === "managed"
-          && (installationMethod === "release" || installationMethod === "git")
-          && !lifecycleBusy
-        : canUninstall
+  function runPackageAction(action) {
+    var allowed = action === "install" ? canInstall : canUninstall
     if (!allowed) return
 
-    packageAction = action
     packageActionRunning = true
     packageError = ""
     packageStatus = action === "install"
       ? "Complete installation in the Omarchy terminal"
-      : action === "update"
-        ? "Complete update in the Omarchy terminal"
-        : "Complete removal in the Omarchy terminal"
+      : "Complete removal in the Omarchy terminal"
     operationPollTimer.ticks = 0
     _operationSeen = false
     operationPollTimer.start()
     var command = ["bash", helperPath, action]
-    if (action === "install") {
-      command.push(String(method || ""))
-      if (method === "release") command.push(String(value || ""))
-      command.push(String(installPath || ""))
-      command.push(String(sourcePath || ""))
-    }
     Quickshell.execDetached(command)
   }
 
@@ -405,7 +379,6 @@ QtObject {
       if (ticks >= 10 && !root._operationSeen) {
         stop()
         root.packageActionRunning = false
-        root.packageAction = ""
         root.packageStatus = ""
         root.packageError = "The installation terminal did not start"
       }
