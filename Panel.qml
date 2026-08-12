@@ -19,29 +19,6 @@ Panel {
   readonly property string homePath: Quickshell.env("HOME")
   property bool moreOpen: false
   property bool uninstallConfirmOpen: false
-  readonly property bool githubManaged: syncthing
-    && syncthing.installationState === "managed"
-    && (syncthing.installationMethod === "release"
-      || syncthing.installationMethod === "git")
-  readonly property string savedInstallationMethod: String(
-    setting("installationMethod", "package"))
-  readonly property string selectedInstallationMethod: githubManaged
-      && savedInstallationMethod === "package"
-    ? syncthing.installationMethod : savedInstallationMethod
-  readonly property string pinnedRelease: String(
-    setting("pinnedRelease", "2.1.3"))
-  readonly property string githubSourcePath: String(setting(
-    "githubSourcePath", "~/.local/share/omarchy-syncthing/source"))
-  readonly property string githubInstallPath: String(setting(
-    "githubInstallPath", "~/.local/share/omarchy-syncthing/install"))
-  readonly property string releaseVersionText: pinnedReleaseField
-    ? String(pinnedReleaseField.text).trim() : pinnedRelease
-  readonly property string sourcePathText: githubSourceField
-    ? String(githubSourceField.text).trim() : githubSourcePath
-  readonly property string installPathText: githubInstallField
-    ? String(githubInstallField.text).trim() : githubInstallPath
-  readonly property bool releaseVersionValid:
-    /^[0-9]+\.[0-9]+\.[0-9]+$/.test(releaseVersionText)
   readonly property var folderRows: buildFolderRows()
   readonly property double trackedBytes: folderTotal("globalBytes")
   readonly property int trackedFiles: folderTotal("globalFiles")
@@ -226,25 +203,8 @@ Panel {
   }
 
   function installationAction() {
-    if (!syncthing) return
-    if (syncthing.installationState === "missing" || githubManaged) {
-      var value = selectedInstallationMethod === "release"
-        ? releaseVersionText : ""
-      syncthing.installSyncthing(selectedInstallationMethod, value,
-        installPathText, sourcePathText)
-    }
-  }
-
-  function persistSetting(key, value) {
-    var entry = { id: moduleName }
-    for (var current in settings) {
-      if (current !== "id") entry[current] = settings[current]
-    }
-    entry[key] = value
-    settings = entry
-    if (bar && bar.shell
-        && typeof bar.shell.updateEntryInline === "function") {
-      bar.shell.updateEntryInline(moduleName, entry)
+    if (syncthing && syncthing.installationState === "missing") {
+      syncthing.installSyncthing()
     }
   }
 
@@ -301,10 +261,6 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      blocked: installMethodDropdown.popupOpen
-        || (pinnedReleaseField && pinnedReleaseField.activeFocus)
-        || (githubSourceField && githubSourceField.activeFocus)
-        || (githubInstallField && githubInstallField.activeFocus)
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(text) {
@@ -518,8 +474,8 @@ Panel {
                 id: installationHelp
                 implicitWidth: implicitHeight
                 text: "?"
-                tooltipText: "GitHub sources can switch in place. "
-                  + "Uninstall before switching to or from the Omarchy package."
+                tooltipText: "Installs and removes the official package through "
+                  + "Omarchy. Syncthing settings and shared folders stay intact."
                 foreground: root.foreground
                 fontFamily: root.fontFamily
                 fontSize: Style.font.caption
@@ -533,118 +489,6 @@ Panel {
               label: "Installation"
               value: root.syncthing
                 ? root.syncthing.installationLabel : "Unavailable"
-            }
-
-            Dropdown {
-              id: installMethodDropdown
-              visible: root.syncthing
-                && (root.syncthing.installationState === "missing"
-                  || root.githubManaged)
-              width: parent.width
-              label: "Install with"
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-              options: root.githubManaged ? [
-                { value: "release", label: "Pinned GitHub release" },
-                { value: "git", label: "Latest GitHub checkout (advanced)" }
-              ] : [
-                { value: "package", label: "Omarchy package (recommended)" },
-                { value: "release", label: "Pinned GitHub release" },
-                { value: "git", label: "Latest GitHub checkout (advanced)" }
-              ]
-              value: root.selectedInstallationMethod
-              onChanged: function(value) {
-                root.persistSetting("installationMethod", value)
-              }
-            }
-
-            Row {
-              visible: installMethodDropdown.visible
-                && root.selectedInstallationMethod === "release"
-              width: parent.width
-              spacing: Style.space(6)
-
-              Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "v"
-                color: root.dim
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.body
-              }
-
-              TextField {
-                id: pinnedReleaseField
-                width: parent.width - x
-                text: root.pinnedRelease
-                placeholderText: "2.1.3"
-                foreground: root.releaseVersionValid
-                  ? root.foreground : root.urgent
-                font.family: root.fontFamily
-                validator: RegularExpressionValidator {
-                  regularExpression: /^[0-9]+\.[0-9]+\.[0-9]+$/
-                }
-                inputMethodHints: Qt.ImhFormattedNumbersOnly
-                onEditingFinished: root.persistSetting(
-                  "pinnedRelease", text.trim())
-                Keys.onEscapePressed: keyCatcher.forceActiveFocus()
-              }
-            }
-
-            Text {
-              visible: installMethodDropdown.visible
-                && root.selectedInstallationMethod === "release"
-              width: parent.width
-              text: root.releaseVersionValid
-                ? "Official tag number, for example 2.1.3"
-                : "Use Number.Number.Number without v"
-              color: root.releaseVersionValid ? root.dim : root.urgent
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-            }
-
-            TextField {
-              id: githubSourceField
-              visible: installMethodDropdown.visible
-                && root.selectedInstallationMethod !== "package"
-              width: parent.width
-              text: root.githubSourcePath
-              placeholderText: "~/.local/share/omarchy-syncthing/source"
-              foreground: root.foreground
-              font.family: root.fontFamily
-              onEditingFinished: root.persistSetting(
-                "githubSourcePath", text.trim())
-              Keys.onEscapePressed: keyCatcher.forceActiveFocus()
-            }
-
-            Text {
-              visible: githubSourceField.visible
-              width: parent.width
-              text: "Source path (Git clone)"
-              color: root.dim
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-            }
-
-            TextField {
-              id: githubInstallField
-              visible: githubSourceField.visible
-              width: parent.width
-              text: root.githubInstallPath
-              placeholderText: "~/.local/share/omarchy-syncthing/install"
-              foreground: root.foreground
-              font.family: root.fontFamily
-              onEditingFinished: root.persistSetting(
-                "githubInstallPath", text.trim())
-              Keys.onEscapePressed: keyCatcher.forceActiveFocus()
-            }
-
-            Text {
-              visible: githubInstallField.visible
-              width: parent.width
-              text: "Install path (service binary)"
-              color: root.dim
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
             }
 
             InfoPair {
@@ -664,22 +508,13 @@ Panel {
                   return "Remove existing Syncthing first."
                 }
                 if (root.syncthing.installationState === "managed") {
-                  if (root.githubManaged) {
-                    return "GitHub sources can switch in place."
-                  }
-                  return "Uninstall to change install method."
+                  return "Managed through Omarchy package management."
                 }
                 if (root.syncthing.installationState === "broken") {
                   return "Managed installation files changed."
                 }
                 if (root.syncthing.installationState === "missing") {
-                  if (root.selectedInstallationMethod === "package") {
-                    return "Uses Omarchy package management."
-                  }
-                  if (root.selectedInstallationMethod === "release") {
-                    return "Builds the selected release tag."
-                  }
-                  return "Builds the latest GitHub checkout."
+                  return "Uses Omarchy package management."
                 }
                 return "Checking installation."
               }
@@ -710,8 +545,7 @@ Panel {
                   return "Install Syncthing"
                 }
                 if (root.syncthing.installationState === "managed") {
-                  return root.githubManaged
-                    ? "Apply GitHub source" : "Uninstall Syncthing"
+                  return "Uninstall Syncthing"
                 }
                 if (root.syncthing.installationState === "broken") {
                   return "Installation changed"
@@ -725,41 +559,14 @@ Panel {
               foreground: root.foreground
               fontFamily: root.fontFamily
               enabled: root.syncthing
-                && (root.syncthing.canInstall || root.githubManaged
-                  || root.syncthing.canUninstall)
+                && (root.syncthing.canInstall || root.syncthing.canUninstall)
                 && !root.syncthing.lifecycleBusy
-                && (root.selectedInstallationMethod !== "release"
-                  || root.releaseVersionValid)
               onClicked: {
-                if (root.githubManaged
-                    || root.syncthing.installationState === "missing") {
+                if (root.syncthing.installationState === "missing") {
                   root.installationAction()
                 } else {
                   root.uninstallConfirmOpen = true
                 }
-              }
-            }
-
-            Row {
-              visible: !root.uninstallConfirmOpen && root.githubManaged
-              spacing: Style.space(8)
-
-              Button {
-                text: "Update"
-                bordered: true
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-                enabled: root.syncthing && !root.syncthing.lifecycleBusy
-                onClicked: root.syncthing.updateSyncthing()
-              }
-
-              Button {
-                text: "Uninstall"
-                bordered: true
-                foreground: root.urgent
-                fontFamily: root.fontFamily
-                enabled: root.syncthing && root.syncthing.canUninstall
-                onClicked: root.uninstallConfirmOpen = true
               }
             }
 
