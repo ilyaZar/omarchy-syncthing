@@ -20,30 +20,13 @@ bar customization controls.
 
 ## Install Syncthing
 
-Open the widget, select **More**, choose an installation method, and select
-**Install Syncthing**. A terminal shows every step and waits for Enter when it
-finishes.
+Open the widget, select **More**, then select **Install Syncthing**. The plugin
+installs the official Arch package through `omarchy pkg add syncthing`, so it
+follows normal system updates. A terminal shows every step and waits for Enter
+when it finishes.
 
-- **Omarchy package** is recommended. It installs the official Arch package
-  through `omarchy pkg add` and follows normal system updates.
-- **Pinned GitHub release** accepts a plain version such as `2.1.3`. The
-  widget shows the fixed `v`, verifies that the upstream tag exists, and
-  builds that exact source.
-- **Latest GitHub checkout** is the advanced option. It has no version field
-  and builds the current default branch.
-
-Both GitHub methods let you choose separate source and install paths. They can
-replace one another without an uninstall, and **Update** checks the installed
-release tag or checkout for a newer upstream version. The resolved commit is
-kept only in the private ownership record. These source builds require Git and
-Go; the terminal reports a missing tool before changing the installation.
-Custom paths may use letters, numbers, `/`, `.`, `_`, and `-`.
-
-If a source build fails before activation, the installed copy is unchanged.
-Activation errors are reported directly.
-
-Switching to or from the Omarchy package requires a clean uninstall. The
-square **?** beside **Installation** explains that boundary inside the widget.
+The square **?** beside **Installation** explains what the plugin manages and
+what it preserves.
 
 After the first start, select **Open Web UI** to add devices and folders.
 
@@ -67,9 +50,9 @@ the final directory visible.
 
 ## Uninstall
 
-Open **More**, select **Uninstall Syncthing**, and confirm. The same recorded
-method removes the software. Syncthing configuration, shared folders, and
-their files are never removed.
+Open **More**, select **Uninstall Syncthing**, and confirm. The package is
+removed through Omarchy. Syncthing configuration, shared folders, and their
+files are never removed.
 
 Remove the plugin separately:
 
