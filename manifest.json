@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "author": "ilyaZar",
   "license": "MIT AND MPL-2.0",
-  "description": "See sync health, open folders, control the service, and install or update Syncthing from the Omarchy bar.",
+  "description": "See sync health, open folders, control the service, and install or remove Syncthing from the Omarchy bar.",
   "kinds": [
     "service",
     "bar-widget"
@@ -17,7 +17,7 @@
   },
   "barWidget": {
     "displayName": "Syncthing",
-    "description": "See sync health, open folders, control the service, and manage Syncthing installation sources.",
+    "description": "See sync health, open folders, control the service, and install or remove Syncthing.",
     "category": "Files",
     "allowMultiple": false,
     "defaultSection": "right",
