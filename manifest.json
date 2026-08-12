@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.ilyazar.syncthing",
+  "name": "Syncthing",
+  "version": "0.1.0",
+  "author": "ilyaZar",
+  "license": "MIT AND MPL-2.0",
+  "description": "See sync health, open folders, control the service, and install or update Syncthing from the Omarchy bar.",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Syncthing",
+    "description": "See sync health, open folders, control the service, and manage Syncthing installation sources.",
+    "category": "Files",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "refreshIntervalSec": 60
+    },
+    "schema": [
+      {
+        "key": "refreshIntervalSec",
+        "type": "integer",
+        "label": "Refresh interval (seconds)",
+        "min": 60,
+        "max": 3600,
+        "step": 60,
+        "defaultValue": 60
+      }
+    ]
+  }
+}
