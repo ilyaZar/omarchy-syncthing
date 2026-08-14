@@ -17,6 +17,7 @@ QtObject {
   property var devices: []
   property var folders: []
   property var folderStatuses: ({})
+  property string localDeviceId: ""
 
   property string installationState: "checking"
   property string installationLabel: "Checking"
@@ -29,10 +30,20 @@ QtObject {
   property string packageStatus: ""
   property string packageError: ""
   property string controlError: ""
+  readonly property string recoveryWarning: _recoveryActive
+    ? (_apiKey ? "Refreshing Syncthing state" : "Trying to find local API key")
+      + [".", "..", "..."][_recoveryDotCount] : ""
 
   property string _apiKey: ""
+  property bool _recoveryActive: false
+  property bool _apiKeyFailureLatched: false
+  property int _apiKeyAttempts: 0
+  property int _recoveryDotCount: 0
+  property int _recoveryTicks: 0
+  property bool _finishRecoveryAfterRefresh: false
   property int _generation: 0
   property int _pendingRequests: 0
+  property bool _connectionRefreshing: false
   property var _requests: []
   property string _keyOutput: ""
   property string _packageOutput: ""
@@ -69,9 +80,10 @@ QtObject {
     var count = 0
     var values = connections && connections.connections
       ? connections.connections : {}
-    var ids = Object.keys(values)
-    for (var i = 0; i < ids.length; i++) {
-      if (values[ids[i]].connected === true) count++
+    for (var i = 0; i < devices.length; i++) {
+      var id = String((devices[i] || {}).deviceID || "")
+      if (id && id === localDeviceId) count++
+      else if (id && values[id] && values[id].connected === true) count++
     }
     return count
   }
@@ -122,6 +134,8 @@ QtObject {
   }
 
   function refresh() {
+    _apiKeyFailureLatched = false
+    if (phase === "error") lastError = ""
     updateInstallationStatus()
     refreshApi()
   }
@@ -146,7 +160,9 @@ QtObject {
     phase = "loading"
     lastError = ""
 
-    fetch("getSystemStatus", {}, function() {})
+    fetch("getSystemStatus", {}, function(data) {
+      root.localDeviceId = String((data || {}).myID || "")
+    })
     fetch("getConnections", {}, function(data) {
       root.connections = data || ({})
     })
@@ -165,11 +181,14 @@ QtObject {
   function stopApi(nextPhase) {
     _generation++
     abortRequests()
+    stopRecovery()
+    _apiKeyFailureLatched = false
     _apiKey = ""
     connections = ({})
     devices = []
     folders = []
     folderStatuses = ({})
+    localDeviceId = ""
     phase = nextPhase
     lastError = ""
   }
@@ -195,34 +214,43 @@ QtObject {
     folderStatuses = next
   }
 
-  function fetch(name, options, onSuccess, onError) {
+  function fetch(name, options, onSuccess, onError, showProgress) {
     var generation = _generation
-    _pendingRequests++
-    refreshing = true
+    var visible = showProgress !== false
+    if (visible) {
+      _pendingRequests++
+      refreshing = true
+    }
     var xhr = Api.request(baseUrl, _apiKey, name, options, function(data) {
       if (generation !== root._generation) return
       if (onSuccess) onSuccess(data)
-      root.finishRequest(generation)
+      root.finishRequest(generation, visible)
     }, function(error) {
       if (generation !== root._generation) return
       if (onError) onError(error)
       else root.fail(error)
-      root.finishRequest(generation)
+      root.finishRequest(generation, visible)
     })
     var next = _requests.slice()
     next.push(xhr)
     _requests = next
   }
 
-  function finishRequest(generation) {
+  function finishRequest(generation, visible) {
     if (generation !== _generation) return
-    _pendingRequests = Math.max(0, _pendingRequests - 1)
-    refreshing = _pendingRequests > 0
+    if (visible) {
+      _pendingRequests = Math.max(0, _pendingRequests - 1)
+      refreshing = _pendingRequests > 0
+    }
     if (!refreshing && phase === "loading") phase = "ready"
+    if (!refreshing && _finishRecoveryAfterRefresh && phase === "ready") {
+      stopRecovery()
+    }
   }
 
   function fail(error) {
     if (error && error.status === 403) _apiKey = ""
+    stopRecovery()
     phase = "error"
     lastError = error ? error.message : "Connection failed"
   }
@@ -236,11 +264,23 @@ QtObject {
     }
     _requests = []
     _pendingRequests = 0
+    _connectionRefreshing = false
     refreshing = false
   }
 
   function discoverApiKey() {
-    if (apiKeyProcess.running || !executablePath) return
+    if (apiKeyProcess.running || !executablePath || _apiKeyFailureLatched) {
+      return
+    }
+    apiKeyRetryTimer.stop()
+    if (!_recoveryActive) {
+      _recoveryActive = true
+      _apiKeyAttempts = 0
+      _recoveryDotCount = 0
+      _recoveryTicks = 0
+      _finishRecoveryAfterRefresh = false
+    }
+    _apiKeyAttempts++
     _generation++
     abortRequests()
     phase = "discovering"
@@ -255,6 +295,22 @@ QtObject {
       "get"
     ]
     apiKeyProcess.running = true
+  }
+
+  function stopRecovery() {
+    _recoveryActive = false
+    _apiKeyAttempts = 0
+    _recoveryDotCount = 0
+    _recoveryTicks = 0
+    _finishRecoveryAfterRefresh = false
+    apiKeyRetryTimer.stop()
+  }
+
+  function failApiKeyRecovery() {
+    stopRecovery()
+    _apiKeyFailureLatched = true
+    phase = "error"
+    lastError = "Could not discover the local API key"
   }
 
   function updateInstallationStatus() {
@@ -333,6 +389,7 @@ QtObject {
     var start = !serviceActive
     _desiredServiceState = start ? 1 : 0
     controlError = ""
+    _apiKeyFailureLatched = false
     _controlErrorOutput = ""
     controlProcess.command = [
       "systemctl",
@@ -343,6 +400,19 @@ QtObject {
     if (!start) stopApi("stopped")
     else phase = "discovering"
     controlProcess.running = true
+  }
+
+  function refreshConnections() {
+    if (!_apiKey || !canUseRuntime || refreshing || _connectionRefreshing
+        || (serviceAvailable && !serviceActive)) return
+    _connectionRefreshing = true
+    fetch("getConnections", {}, function(data) {
+      root.connections = data || ({})
+      root._connectionRefreshing = false
+    }, function(error) {
+      root._connectionRefreshing = false
+      root.fail(error)
+    }, false)
   }
 
   property Timer refreshTimer: Timer {
@@ -382,6 +452,43 @@ QtObject {
     onTriggered: root.packageStatus = ""
   }
 
+  property Timer recoveryDotTimer: Timer {
+    interval: 500
+    repeat: true
+    running: root._recoveryActive
+    onTriggered: root._recoveryDotCount = (root._recoveryDotCount + 1) % 3
+  }
+
+  property Timer apiKeyRetryTimer: Timer {
+    interval: 1000
+    repeat: false
+    onTriggered: root.discoverApiKey()
+  }
+
+  property Timer recoveryRefreshTimer: Timer {
+    interval: 1000
+    repeat: true
+    running: root._recoveryActive && root._apiKey !== ""
+    onTriggered: {
+      if (!root.refreshing) {
+        root._recoveryTicks++
+        if (root._recoveryTicks >= 10) {
+          root._finishRecoveryAfterRefresh = true
+          root.refreshApi()
+        } else {
+          root.refreshConnections()
+        }
+      }
+    }
+  }
+
+  property Timer connectionRefreshTimer: Timer {
+    interval: 10000
+    repeat: true
+    running: true
+    onTriggered: if (!root._recoveryActive) root.refreshConnections()
+  }
+
   property Process apiKeyProcess: Process {
     id: apiKeyProcess
     command: []
@@ -394,10 +501,15 @@ QtObject {
       var key = String(root._keyOutput || apiKeyStdout.text || "").trim()
       if (exitCode === 0 && key) {
         root._apiKey = key
+        root.apiKeyRetryTimer.stop()
+        root._recoveryTicks = 0
+        root._finishRecoveryAfterRefresh = false
+        root._apiKeyFailureLatched = false
         root.refreshApi()
-      } else if (root.serviceActive) {
-        root.phase = "error"
-        root.lastError = "Could not discover the local API key"
+      } else if (root.canUseRuntime
+          && (!root.serviceAvailable || root.serviceActive)) {
+        if (root._apiKeyAttempts < 15) root.apiKeyRetryTimer.restart()
+        else root.failApiKeyRecovery()
       }
     }
   }
@@ -448,6 +560,7 @@ QtObject {
   Component.onDestruction: {
     _generation++
     abortRequests()
+    stopRecovery()
     _apiKey = ""
   }
 }
