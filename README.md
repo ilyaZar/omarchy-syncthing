@@ -25,9 +25,9 @@ After installation, the plugin treats Syncthing like any other existing
 installation. It does not retain package ownership or offer package removal.
 
 After the first start, select **Open Web UI** to add devices and configure
-advanced folder options; the latter can also be configured by the plugin UI
-though the easiest first setup is likely achieved by using the official web UI.
-Syncthing ships with the Web UI built in.
+advanced folder options. Syncthing ships with the Web UI built in, so no
+separate installation is required. Basic folder management is also available
+directly from the plugin.
 
 ## Use
 
@@ -53,13 +53,13 @@ Syncthing ships with the Web UI built in.
 | `Q`   | close the panel           |
 | `Esc` | close the panel           |
 
-## Usage and managing folders
+## Manage folders
 
-In this plugin, **UNLINK** sets Syncthing's reversible `paused` flag to `true`;
-**LINK** sets it to `false`. Neither action creates a filesystem link or changes
-device sharing. Unlinking preserves the Folder ID, path, settings, device
-associations, directory, and data. Linking can resume synchronization
-immediately.
+**UNLINK** pauses a folder; **LINK** resumes it. Both map directly to
+Syncthing's reversible `paused` setting. Neither action creates a filesystem
+link or changes device sharing. Unlinking preserves the Folder ID, path,
+settings, device associations, directory, and data. Linking can resume
+synchronization immediately.
 
 Adding a folder requires an existing local directory and a unique Folder ID. It
 creates an active (`paused=false`) configuration from Syncthing's current folder
@@ -80,10 +80,10 @@ begins. The plugin never silently shares a new directory with every configured
 device.
 
 Pending unencrypted folder offers appear under **More** and in the add form.
-**ACCEPT** only opens the form with the existing Folder ID, label, and named
-offering device selected. Choose an existing local path, then select **ADD
-FOLDER** to complete acceptance. Folder IDs with encrypted offers and sharing
-with untrusted devices must be handled in the Syncthing Web UI.
+**ACCEPT** pre-fills the form with the existing Folder ID, label, and named
+offering device. Choose an existing local path, then select **ADD FOLDER** to
+complete acceptance. Folder IDs with encrypted offers and sharing with untrusted
+devices must be handled in the Syncthing Web UI.
 
 An unlinked row has a **FORGET** action. After confirmation, this removes only
 that folder from Syncthing configuration and the plugin view. It does not delete
@@ -96,13 +96,10 @@ intended devices. Reusing an ID restores only the folder identity, not the
 previous settings or device selections. Select **NEW ID** only when creating a
 different folder identity.
 
-Folder mutations use Syncthing's documented granular REST configuration
-endpoints, available since Syncthing 1.12.0. Operations are serialized and the
-plugin immediately reloads Syncthing configuration after every result.
+Folder management requires Syncthing 1.12.0 or later.
 
-**BROWSE** opens a `qml6` folder chooser and uses Omarchy's `hyprctl` and `jq`
-tools to float and position it. A path can be entered manually if the chooser is
-unavailable.
+**BROWSE** opens a folder chooser. A path can be entered manually if the chooser
+is unavailable.
 
 ## Remove Syncthing
 
@@ -134,10 +131,10 @@ configuration. The plugin stores no separate folder-restoration metadata.
 
 ## Security and license
 
-The plugin talks only to Syncthing's local API at `127.0.0.1:8384`. It reads the
-API key into memory and never intentionally writes or logs it. Like other
-Omarchy shell plugins, it runs unsandboxed; the API key permits Syncthing
-configuration changes.
+The plugin talks only to Syncthing's local API at `127.0.0.1:8384`. It keeps the
+API key in memory and does not persist or log it. Like other Omarchy shell
+plugins, it runs unsandboxed; the API key permits Syncthing configuration
+changes.
 
 Plugin code is MIT licensed. Adapted Syncthing status icons are MPL-2.0; their
 source and attribution are documented in `assets/README.md`.

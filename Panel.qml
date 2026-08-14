@@ -1317,6 +1317,22 @@ Panel {
               }
 
               Button {
+                text: "+"
+                Layout.preferredHeight: Style.space(28)
+                tooltipText: root.addOpen ? "Close add folder form" : "Add folder"
+                bordered: true
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                fontSize: Style.font.body
+                horizontalPadding: Style.space(7)
+                verticalPadding: Style.space(3)
+                enabled: root.syncthing && root.syncthing.online
+                  && !root.syncthing.folderMutationBusy
+                onClicked: root.addOpen
+                  ? root.closeAddFolder() : root.openAddFolder()
+              }
+
+              Button {
                 id: folderLinkButton
                 readonly property var targetFolder: root.selectedFolder()
                 readonly property bool targetBusy: root.syncthing
@@ -1342,22 +1358,6 @@ Panel {
                   && root.syncthing.online && !root.syncthing.folderMutationBusy
                 onClicked: root.syncthing.setFolderLinked(
                   targetFolder.id, targetFolder.paused)
-              }
-
-              Button {
-                text: "+"
-                Layout.preferredHeight: Style.space(28)
-                tooltipText: root.addOpen ? "Close add folder form" : "Add folder"
-                bordered: true
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-                fontSize: Style.font.body
-                horizontalPadding: Style.space(7)
-                verticalPadding: Style.space(3)
-                enabled: root.syncthing && root.syncthing.online
-                  && !root.syncthing.folderMutationBusy
-                onClicked: root.addOpen
-                  ? root.closeAddFolder() : root.openAddFolder()
               }
             }
 
