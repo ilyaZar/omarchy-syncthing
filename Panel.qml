@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Io
 import qs.Commons
 import qs.Ui
 
@@ -20,15 +21,34 @@ Panel {
   readonly property color dim: Qt.darker(foreground, 1.5)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property string homePath: Quickshell.env("HOME")
+  readonly property string folderPickerScript: localPathFromUrl(
+    Qt.resolvedUrl("scripts/syncthing-folder-picker.sh"))
   property bool moreOpen: false
+  property bool addOpen: false
+  property bool addIdEdited: false
+  property bool addLabelFromOffer: false
+  property bool addSubmissionPending: false
+  property bool preserveStateForFolderPicker: false
+  property string selectedFolderId: ""
+  property string selectedPendingOffer: ""
+  property string forgetFolderId: ""
+  property bool forgetConfirmOpen: false
+  property string folderPickerOutput: ""
+  property string folderPickerError: ""
+  property string displayedNotice: ""
+  property bool noticeShown: false
   readonly property var folderRows: buildFolderRows()
+  readonly property var pendingOfferRows: pendingOfferOptions()
   readonly property double trackedBytes: folderTotal("globalBytes")
   readonly property int trackedFiles: folderTotal("globalFiles")
   readonly property int scanningFolderCount: folderStateCount("scanning")
   readonly property int pausedFolderCount: folderStateCount("paused")
+  readonly property bool syncInProgress: syncthing
+    ? syncthing.syncingFolderCount > 0 || scanningFolderCount > 0
+      || syncthing.syncingFiles.length > 0
+    : false
   readonly property bool busy: syncthing
-    ? syncthing.refreshing || syncthing.syncingFolderCount > 0
-      || scanningFolderCount > 0 || syncthing.syncingFiles.length > 0
+    ? syncthing.refreshing || syncInProgress
     : false
   readonly property bool hasProblems: syncthing
     ? syncthing.folderProblemCount > 0 : false
@@ -42,15 +62,24 @@ Panel {
   }
   readonly property url syncthingIconSource: Qt.resolvedUrl(
     "assets/status-" + iconVariant + ".svg")
-  readonly property string tooltip: syncthing
-    ? "Syncthing: " + syncthing.summaryText : "Syncthing unavailable"
+  readonly property string tooltip: {
+    if (!syncthing) return "Syncthing unavailable"
+    if (iconVariant === "sync" && syncInProgress) {
+      return "Syncthing: Sync in progress..."
+    }
+    return "Syncthing: " + syncthing.summaryText
+  }
   readonly property string toggleHint: syncthing && syncthing.serviceActive
     ? "Stop syncing" : "Start syncing"
   readonly property string visibleError: {
+    if (folderPickerError) return folderPickerError
     if (!syncthing) return ""
-    return syncthing.controlError || syncthing.packageError
+    return syncthing.folderMutationError || syncthing.controlError
+      || syncthing.packageError
       || syncthing.lastError || ""
   }
+  readonly property string visibleNotice: syncthing
+    ? syncthing.folderMutationNotice : ""
   readonly property string visibleWarning: syncthing
     ? syncthing.recoveryWarning : ""
   readonly property string visibleSyncActivity: syncthing
@@ -116,10 +145,23 @@ Panel {
       var needItems = Number(status.needTotalItems || 0)
       var syncing = needItems > 0 || state.indexOf("sync") === 0
       var scanning = state.indexOf("scan") === 0
+      var configuredLabel = String(folder.label || "")
+      var displayName = pathLabel(resolveFolderPath(folder.path))
+        || configuredLabel || id || "Unnamed folder"
+      var sharedDeviceCount = 0
+      var folderDevices = folder.devices || []
+      for (var j = 0; j < folderDevices.length; j++) {
+        var deviceId = String((folderDevices[j] || {}).deviceID || "")
+        if (deviceId && (!syncthing || deviceId !== syncthing.localDeviceId)) {
+          sharedDeviceCount++
+        }
+      }
 
       rows.push({
         id: id,
-        label: String(folder.label || id || "Unnamed folder"),
+        label: displayName,
+        configuredLabel: configuredLabel,
+        markerName: String(folder.markerName || ".stfolder"),
         path: String(folder.path || ""),
         state: state,
         error: String(status.error || ""),
@@ -127,6 +169,7 @@ Panel {
         syncing: syncing,
         scanning: scanning,
         paused: !!folder.paused,
+        sharedDeviceCount: sharedDeviceCount,
         needItems: needItems,
         needBytes: Number(status.needBytes || 0),
         globalFiles: Number(status.globalFiles || 0),
@@ -172,26 +215,312 @@ Panel {
   }
 
   function folderMeta(folder) {
-    if (folder.problem) return folder.error || "Folder needs attention"
-    if (folder.paused) return "Syncing paused"
-    if (folder.scanning) return "Scanning local changes"
+    var labelSuffix = folder.configuredLabel
+      && folder.configuredLabel !== folder.label
+      ? " · " + folder.configuredLabel : ""
+    if (folder.problem) {
+      return (folder.error || "Folder needs attention") + labelSuffix
+    }
+    if (folder.paused) return "Syncing paused" + labelSuffix
+    if (folder.scanning) return "Scanning local changes" + labelSuffix
     if (folder.syncing) {
       var remaining = formatCount(folder.needItems) + " item"
         + (folder.needItems === 1 ? "" : "s") + " remaining"
       return folder.needBytes > 0
-        ? remaining + " · " + formatBytes(folder.needBytes) : remaining
+        ? remaining + " · " + formatBytes(folder.needBytes) + labelSuffix
+        : remaining + labelSuffix
+    }
+    if (folder.sharedDeviceCount === 0) {
+      return formatCount(folder.globalFiles) + " files · local only" + labelSuffix
     }
     return formatCount(folder.globalFiles) + " files · "
-      + formatBytes(folder.globalBytes)
+      + formatBytes(folder.globalBytes) + labelSuffix
   }
 
-  function folderStatus(folder) {
-    if (folder.problem) return "ISSUE"
-    if (folder.paused) return "PAUSED"
-    if (folder.scanning) return "SCANNING"
-    if (folder.syncing) return "SYNCING"
-    if (folder.state === "unknown") return "UNKNOWN"
-    return "CURRENT"
+  function folderLinkState(folder) {
+    return folder && folder.paused ? "UNLINKED" : "LINKED"
+  }
+
+  function selectedFolder() {
+    for (var i = 0; i < folderRows.length; i++) {
+      if (folderRows[i].id === selectedFolderId) return folderRows[i]
+    }
+    return null
+  }
+
+  function ensureFolderSelection() {
+    if (selectedFolder()) return
+    selectedFolderId = folderRows.length > 0 ? folderRows[0].id : ""
+  }
+
+  function selectFolderOffset(offset) {
+    if (folderRows.length < 2 || offset === 0) return
+    var index = 0
+    for (var i = 0; i < folderRows.length; i++) {
+      if (folderRows[i].id === selectedFolderId) {
+        index = i
+        break
+      }
+    }
+    index = (index + (offset > 0 ? 1 : -1) + folderRows.length)
+      % folderRows.length
+    selectedFolderId = folderRows[index].id
+  }
+
+  function folderOptions() {
+    var options = []
+    for (var i = 0; i < folderRows.length; i++) {
+      var duplicate = false
+      for (var j = 0; j < folderRows.length; j++) {
+        if (i !== j && folderRows[j].label === folderRows[i].label) {
+          duplicate = true
+        }
+      }
+      var label = folderRows[i].label
+      if (duplicate) label += " (" + pathParentName(folderRows[i].path) + ")"
+      options.push({ value: folderRows[i].id, label: label })
+    }
+    return options
+  }
+
+  function deviceName(deviceId) {
+    var source = syncthing && syncthing.devices ? syncthing.devices : []
+    for (var i = 0; i < source.length; i++) {
+      var device = source[i] || ({})
+      if (String(device.deviceID || "") === String(deviceId || "")) {
+        return String(device.name || "Device "
+          + String(device.deviceID || "").slice(0, 7))
+      }
+    }
+    return "Unknown device"
+  }
+
+  function deviceOptions() {
+    var options = []
+    var source = syncthing && syncthing.devices ? syncthing.devices : []
+    for (var i = 0; i < source.length; i++) {
+      var device = source[i] || ({})
+      var id = String(device.deviceID || "")
+      if (!id || id === syncthing.localDeviceId) continue
+      options.push({
+        value: id,
+        label: String(device.name || "Device " + id.slice(0, 7)),
+        description: device.untrusted
+          ? "Encrypted sharing requires the Web UI"
+          : "Will receive a folder share offer"
+      })
+    }
+    return options
+  }
+
+  function pendingOfferOptions() {
+    var options = []
+    var pending = syncthing && syncthing.pendingFolders
+      ? syncthing.pendingFolders : ({})
+    var ids = Object.keys(pending)
+    for (var i = 0; i < ids.length; i++) {
+      var offeredBy = (pending[ids[i]] || {}).offeredBy || ({})
+      var deviceIds = Object.keys(offeredBy)
+      var encrypted = false
+      for (var encryptedIndex = 0;
+          encryptedIndex < deviceIds.length; encryptedIndex++) {
+        var candidate = offeredBy[deviceIds[encryptedIndex]] || ({})
+        if (candidate.receiveEncrypted === true
+            || candidate.remoteEncrypted === true) encrypted = true
+      }
+      if (encrypted) continue
+      for (var j = 0; j < deviceIds.length; j++) {
+        var offer = offeredBy[deviceIds[j]] || ({})
+        var label = String(offer.label || ids[i])
+        options.push({
+          value: JSON.stringify([ids[i], deviceIds[j]]),
+          label: label + " from " + deviceName(deviceIds[j])
+        })
+      }
+    }
+    return options
+  }
+
+  function pendingFolderOptions() {
+    var options = [{ value: "", label: "Create a new folder identity" }]
+    for (var i = 0; i < pendingOfferRows.length; i++) {
+      options.push({
+        value: pendingOfferRows[i].value,
+        label: "Accept " + pendingOfferRows[i].label
+      })
+    }
+    return options
+  }
+
+  function ensurePendingOfferSelection() {
+    for (var i = 0; i < pendingOfferRows.length; i++) {
+      if (pendingOfferRows[i].value === selectedPendingOffer) return
+    }
+    selectedPendingOffer = pendingOfferRows.length > 0
+      ? pendingOfferRows[0].value : ""
+  }
+
+  function encryptedPendingOfferCount() {
+    var count = 0
+    var pending = syncthing && syncthing.pendingFolders
+      ? syncthing.pendingFolders : ({})
+    var ids = Object.keys(pending)
+    for (var i = 0; i < ids.length; i++) {
+      var offeredBy = (pending[ids[i]] || {}).offeredBy || ({})
+      var deviceIds = Object.keys(offeredBy)
+      var encrypted = false
+      for (var j = 0; j < deviceIds.length; j++) {
+        var offer = offeredBy[deviceIds[j]] || ({})
+        if (offer.receiveEncrypted === true || offer.remoteEncrypted === true) {
+          encrypted = true
+        }
+      }
+      if (encrypted) count++
+    }
+    return count
+  }
+
+  function pathLabel(path) {
+    var value = String(path || "").replace(/\/+$/, "")
+    if (String(path || "").charAt(0) === "/" && value === "") return "/"
+    var parts = value.split("/")
+    return parts.length > 0 && parts[parts.length - 1]
+      ? parts[parts.length - 1] : "Folder"
+  }
+
+  function pathParentName(path) {
+    var value = resolveFolderPath(path).replace(/\/+$/, "")
+    if (!value || value === "/") return "/"
+    var parts = value.split("/")
+    parts.pop()
+    return parts.length > 0 && parts[parts.length - 1]
+      ? parts[parts.length - 1] : "/"
+  }
+
+  function localPathFromUrl(url) {
+    var value = String(url || "")
+    if (value.indexOf("file://") === 0) value = value.slice(7)
+    return decodeURIComponent(value)
+  }
+
+  function openAddFolder() {
+    if (!syncthing || !syncthing.online || syncthing.folderMutationBusy) return
+    syncthing.clearFolderMutationMessage()
+    addOpen = true
+    addIdEdited = false
+    addLabelFromOffer = false
+    addSubmissionPending = false
+    addPathField.text = ""
+    addLabelField.text = ""
+    addIdField.text = ""
+    pendingFolderPicker.value = ""
+    devicePicker.values = []
+    syncthing.requestFolderIdSuggestion()
+    Qt.callLater(function() { addPathField.forceActiveFocus() })
+  }
+
+  function closeAddFolder() {
+    if (syncthing && syncthing.folderMutationBusy
+        && syncthing.folderMutationAction === "add") return
+    addOpen = false
+    addSubmissionPending = false
+    keyCatcher.forceActiveFocus()
+  }
+
+  function resetTransientState() {
+    moreOpen = false
+    addOpen = false
+    addIdEdited = false
+    addLabelFromOffer = false
+    addSubmissionPending = false
+    forgetFolderId = ""
+    forgetConfirmOpen = false
+    folderPickerError = ""
+    if (folderSelector.popupOpen) folderSelector.close()
+    if (pendingOfferSelector.popupOpen) pendingOfferSelector.close()
+    if (devicePicker.popupOpen) devicePicker.close()
+  }
+
+  function applyPendingFolder(value) {
+    var selected = String(value || "")
+    devicePicker.values = []
+    if (!selected) {
+      addIdEdited = false
+      addIdField.text = ""
+      if (addLabelFromOffer) addLabelField.text = ""
+      addLabelFromOffer = false
+      if (syncthing) syncthing.requestFolderIdSuggestion()
+      return
+    }
+    var choice
+    try {
+      choice = JSON.parse(selected)
+    } catch (error) {
+      return
+    }
+    if (!(choice instanceof Array) || choice.length !== 2) return
+    var id = String(choice[0] || "")
+    var deviceId = String(choice[1] || "")
+    var pending = syncthing && syncthing.pendingFolders
+      ? syncthing.pendingFolders[id] || ({}) : ({})
+    var offeredBy = pending.offeredBy || ({})
+    var offer = offeredBy[deviceId] || ({})
+    addIdEdited = true
+    addIdField.text = id
+    addLabelField.text = String(offer.label || id)
+    addLabelFromOffer = true
+    devicePicker.values = deviceId ? [deviceId] : []
+  }
+
+  function acceptPendingFolderOffer(value) {
+    var selected = String(value || "")
+    if (!selected) return
+    openAddFolder()
+    if (!addOpen) return
+    pendingFolderPicker.value = selected
+    applyPendingFolder(selected)
+    if (panelFlick) panelFlick.contentY = 0
+    Qt.callLater(function() { addPathField.forceActiveFocus() })
+  }
+
+  function selectedPendingDeviceId() {
+    var value = String(pendingFolderPicker.value || "")
+    if (!value) return ""
+    try {
+      var choice = JSON.parse(value)
+      if (!(choice instanceof Array) || choice.length !== 2) return ""
+      var deviceId = String(choice[1] || "")
+      return devicePicker.values.indexOf(deviceId) >= 0 ? deviceId : ""
+    } catch (error) {
+      return ""
+    }
+  }
+
+  function submitAddFolder() {
+    if (!syncthing || syncthing.folderMutationBusy) return
+    var label = String(addLabelField.text || "").trim()
+    if (!label) label = pathLabel(addPathField.text)
+    selectedFolderId = String(addIdField.text || "").trim()
+    addSubmissionPending = syncthing.addFolder(
+      addPathField.text,
+      label,
+      addIdField.text,
+      devicePicker.values,
+      selectedPendingDeviceId())
+  }
+
+  function requestForget(folder) {
+    if (!folder || !folder.paused || !syncthing
+        || syncthing.folderMutationBusy) return
+    selectedFolderId = folder.id
+    forgetFolderId = folder.id
+    forgetConfirmOpen = true
+  }
+
+  function confirmForget() {
+    forgetConfirmOpen = false
+    if (syncthing) syncthing.forgetFolder(forgetFolderId)
+    forgetFolderId = ""
   }
 
   function openWebUi() {
@@ -202,6 +531,16 @@ Panel {
     var path = resolveFolderPath(folder ? folder.path : "")
     if (!path) return
     Quickshell.execDetached(["uwsm-app", "--", "xdg-open", path])
+  }
+
+  function browseForFolder() {
+    if (folderPickerProcess.running) return
+    folderPickerOutput = ""
+    folderPickerError = ""
+    folderPickerProcess.command = ["bash", folderPickerScript]
+    preserveStateForFolderPicker = true
+    close()
+    folderPickerProcess.running = true
   }
 
   function resolveFolderPath(value) {
@@ -225,12 +564,112 @@ Panel {
 
   onSyncthingChanged: configureService()
   onSettingsChanged: configureService()
-  onOpenedChanged: if (opened) {
-    if (syncthing) syncthing.refresh()
-    if (panelFlick) panelFlick.contentY = 0
-    Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+  onFolderRowsChanged: ensureFolderSelection()
+  onPendingOfferRowsChanged: ensurePendingOfferSelection()
+  onVisibleNoticeChanged: {
+    if (visibleNotice !== "") {
+      displayedNotice = visibleNotice
+      noticeShown = true
+      noticeFadeTimer.stop()
+      noticeDisplayTimer.restart()
+    } else if (displayedNotice !== "") {
+      noticeDisplayTimer.stop()
+      noticeShown = false
+      noticeFadeTimer.restart()
+    }
+  }
+  onOpenedChanged: {
+    if (opened) {
+      if (syncthing) syncthing.refresh()
+      ensureFolderSelection()
+      if (panelFlick) panelFlick.contentY = 0
+      Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+    } else if (!preserveStateForFolderPicker) {
+      resetTransientState()
+    }
   }
   Component.onCompleted: configureService()
+
+  Timer {
+    id: noticeDisplayTimer
+    interval: 10000
+    repeat: false
+    onTriggered: {
+      root.noticeShown = false
+      noticeFadeTimer.restart()
+    }
+  }
+
+  Timer {
+    id: noticeFadeTimer
+    interval: 350
+    repeat: false
+    onTriggered: {
+      if (root.noticeShown) return
+      var expired = root.displayedNotice
+      root.displayedNotice = ""
+      if (root.syncthing
+          && root.syncthing.folderMutationNotice === expired) {
+        root.syncthing.clearFolderMutationNotice()
+      }
+    }
+  }
+
+  Connections {
+    target: root.syncthing
+
+    function onFolderIdSuggestionChanged() {
+      if (root.addOpen && !root.addIdEdited
+          && pendingFolderPicker.value === "") {
+        addIdField.text = root.syncthing.folderIdSuggestion
+      }
+    }
+
+    function onFolderMutationNoticeChanged() {
+      if (root.addSubmissionPending
+          && root.syncthing.folderMutationNotice !== "") {
+        root.addOpen = false
+        root.addSubmissionPending = false
+        keyCatcher.forceActiveFocus()
+      }
+    }
+
+    function onFolderMutationErrorChanged() {
+      if (root.syncthing.folderMutationError !== "") {
+        root.addSubmissionPending = false
+      }
+    }
+  }
+
+  Process {
+    id: folderPickerProcess
+    command: []
+
+    stdout: StdioCollector {
+      id: folderPickerStdout
+      waitForEnd: true
+      onStreamFinished: root.folderPickerOutput = text
+    }
+
+    onExited: function(exitCode) {
+      var selected = String(root.folderPickerOutput
+        || folderPickerStdout.text || "").trim()
+      if (exitCode === 0 && selected) {
+        var path = root.localPathFromUrl(selected)
+        addPathField.text = path
+        if (!addLabelField.text) addLabelField.text = root.pathLabel(path)
+      } else if (exitCode !== 0) {
+        root.folderPickerError = "Folder chooser failed; enter the path manually."
+      }
+      Qt.callLater(function() {
+        root.preserveStateForFolderPicker = false
+        root.open()
+        if (root.addOpen) {
+          Qt.callLater(function() { addPathField.forceActiveFocus() })
+        }
+      })
+    }
+  }
 
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
@@ -272,17 +711,42 @@ Panel {
     contentWidth: popup.fittedContentWidth(Style.space(380))
     contentHeight: popup.fittedContentHeight(content.implicitHeight, Style.space(560))
 
-    PanelKeyCatcher {
-      id: keyCatcher
-      anchors.fill: parent
-      onCloseRequested: root.close()
-      onTabRequested: function(direction) { root.switchPanel(direction) }
-      onTextKey: function(text) {
-        var key = text.toLowerCase()
-        if (key === "r" && root.syncthing) root.syncthing.refresh()
-        else if (key === "w") root.openWebUi()
-        else if (key === "p") root.toggleSyncing()
-        else if (key === "m") root.moreOpen = !root.moreOpen
+      PanelKeyCatcher {
+        id: keyCatcher
+        anchors.fill: parent
+        blocked: root.addOpen || folderSelector.popupOpen
+          || pendingOfferSelector.popupOpen
+        onCloseRequested: {
+          if (root.forgetConfirmOpen) {
+            root.forgetConfirmOpen = false
+            root.forgetFolderId = ""
+          } else if (root.addOpen) root.closeAddFolder()
+          else root.close()
+        }
+        onTabRequested: function(direction) { root.switchPanel(direction) }
+        onMoveRequested: function(dx, dy) {
+          if (root.forgetConfirmOpen && (dx !== 0 || dy !== 0)) {
+            forgetDialog.selectedIndex = forgetDialog.selectedIndex === 0 ? 1 : 0
+          } else if (!root.addOpen && dx !== 0) {
+            root.selectFolderOffset(dx)
+          }
+        }
+        onReturnRequested: {
+          if (root.forgetConfirmOpen) {
+            if (forgetDialog.selectedIndex === 0) {
+              root.forgetConfirmOpen = false
+              root.forgetFolderId = ""
+            } else root.confirmForget()
+          }
+        }
+        onTextKey: function(text) {
+          if (root.forgetConfirmOpen) return
+          var key = text.toLowerCase()
+          if (key === "r" && root.syncthing) root.syncthing.refresh()
+          else if (key === "w") root.openWebUi()
+          else if (key === "p") root.toggleSyncing()
+          else if (key === "m") root.moreOpen = !root.moreOpen
+          else if (key === "q") root.close()
       }
 
       Flickable {
@@ -310,7 +774,8 @@ Panel {
             readonly property bool serviceActive: root.syncthing
               ? root.syncthing.serviceActive : false
             readonly property bool serviceBusy: root.syncthing
-              ? root.syncthing.serviceActionRunning : false
+              ? root.syncthing.serviceActionRunning
+                || root.syncthing.folderMutationBusy : false
             readonly property string toggleHint: root.toggleHint
             function toggleService() { root.toggleSyncing() }
 
@@ -419,6 +884,24 @@ Panel {
             wrapMode: Text.WordWrap
           }
 
+          Text {
+            visible: root.displayedNotice !== ""
+            width: parent.width
+            text: root.displayedNotice
+            opacity: root.noticeShown ? 1 : 0
+            color: root.success
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.bodySmall
+            wrapMode: Text.WordWrap
+
+            Behavior on opacity {
+              NumberAnimation {
+                duration: root.noticeShown ? 0 : 350
+                easing.type: Easing.OutCubic
+              }
+            }
+          }
+
           Column {
             width: parent.width
             spacing: Style.spacing.labelGap
@@ -453,6 +936,289 @@ Panel {
               text: "FOLDERS"
               foreground: root.foreground
               fontFamily: root.fontFamily
+            }
+
+            BorderSurface {
+              id: addForm
+              visible: root.addOpen
+              width: parent.width
+              implicitHeight: addColumn.implicitHeight + Style.space(16)
+              color: "transparent"
+              borderSpec: Border.controlSpec("normal", root.foreground, Color.accent)
+              radius: Style.cornerRadius
+              Keys.onPressed: function(event) {
+                if (event.key === Qt.Key_Escape) {
+                  root.closeAddFolder()
+                  event.accepted = true
+                }
+              }
+
+              Column {
+                id: addColumn
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: Style.space(8)
+                spacing: Style.space(6)
+
+                RowLayout {
+                  width: parent.width
+
+                  PanelSectionHeader {
+                    Layout.fillWidth: true
+                    text: "ADD FOLDER"
+                    foreground: root.foreground
+                    fontFamily: root.fontFamily
+                  }
+
+                  Button {
+                    text: "CANCEL"
+                    bordered: true
+                    foreground: root.urgent
+                    fontFamily: root.fontFamily
+                    fontSize: Style.font.caption
+                    horizontalPadding: Style.space(6)
+                    verticalPadding: Style.space(4)
+                    enabled: !root.syncthing || !root.syncthing.folderMutationBusy
+                    onClicked: root.closeAddFolder()
+                  }
+                }
+
+                Dropdown {
+                  id: pendingFolderPicker
+                  visible: options.length > 1
+                  width: parent.width
+                  showLabel: false
+                  value: ""
+                  options: root.pendingFolderOptions()
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                  onChanged: function(value) { root.applyPendingFolder(value) }
+                }
+
+                Text {
+                  visible: root.encryptedPendingOfferCount() > 0
+                  width: parent.width
+                  text: root.encryptedPendingOfferCount()
+                    + " encrypted folder offer"
+                    + (root.encryptedPendingOfferCount() === 1 ? " requires" : "s require")
+                    + " the Syncthing Web UI."
+                  color: root.warning
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  wrapMode: Text.WordWrap
+                }
+
+                Text {
+                  text: "Existing directory"
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                }
+
+                RowLayout {
+                  width: parent.width
+                  spacing: Style.space(6)
+
+                  TextField {
+                    id: addPathField
+                    Layout.fillWidth: true
+                    enabled: !root.syncthing || !root.syncthing.folderMutationBusy
+                    placeholderText: "/path/to/existing/folder"
+                    foreground: root.foreground
+                  }
+
+                  Button {
+                    text: "BROWSE"
+                    tooltipText: "Choose an existing local directory"
+                    bordered: true
+                    foreground: root.foreground
+                    fontFamily: root.fontFamily
+                    fontSize: Style.font.caption
+                    enabled: (!root.syncthing
+                      || !root.syncthing.folderMutationBusy)
+                      && !folderPickerProcess.running
+                    onClicked: root.browseForFolder()
+                  }
+                }
+
+                Text {
+                  text: "Label"
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                }
+
+                TextField {
+                  id: addLabelField
+                  width: parent.width
+                  enabled: !root.syncthing || !root.syncthing.folderMutationBusy
+                  placeholderText: "Derived from the directory name when empty"
+                  foreground: root.foreground
+                  onTextEdited: root.addLabelFromOffer = false
+                }
+
+                Text {
+                  text: "Folder ID"
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                }
+
+                RowLayout {
+                  width: parent.width
+                  spacing: Style.space(6)
+
+                  TextField {
+                    id: addIdField
+                    Layout.fillWidth: true
+                    enabled: !root.syncthing || !root.syncthing.folderMutationBusy
+                    placeholderText: root.syncthing
+                      && root.syncthing.folderPreparationBusy
+                      ? "Generating..." : "Required folder identity"
+                    foreground: root.foreground
+                    onTextEdited: root.addIdEdited = true
+                    onAccepted: root.submitAddFolder()
+                  }
+
+                  Button {
+                    text: "NEW ID"
+                    tooltipText: "Generate a new Syncthing folder ID"
+                    bordered: true
+                    foreground: root.foreground
+                    fontFamily: root.fontFamily
+                    fontSize: Style.font.caption
+                    enabled: root.syncthing
+                      && !root.syncthing.folderPreparationBusy
+                      && !root.syncthing.folderMutationBusy
+                    onClicked: {
+                      root.addIdEdited = false
+                      addIdField.text = ""
+                      pendingFolderPicker.value = ""
+                      root.syncthing.requestFolderIdSuggestion()
+                    }
+                  }
+                }
+
+                Text {
+                  width: parent.width
+                  text: "Reuse the exact ID to rejoin an existing remote folder. "
+                    + "A new ID creates a different folder identity."
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  wrapMode: Text.WordWrap
+                }
+
+                MultiSelect {
+                  id: devicePicker
+                  property double lastClosedAt: 0
+                  width: parent.width
+                  label: "Share with devices"
+                  values: []
+                  options: root.deviceOptions()
+                  noSelectionText: "Local only"
+                  placeholderText: "Find a device..."
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+
+                  onPopupOpenChanged: if (!popupOpen) lastClosedAt = Date.now()
+
+                  MouseArea {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    height: parent.rowHeight
+                    z: 10
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+
+                    onEntered: parent.hasCursor = true
+                    onExited: parent.hasCursor = false
+                    onPressed: function(mouse) {
+                      if (parent.popupOpen) parent.close()
+                      mouse.accepted = true
+                    }
+                    onClicked: function(mouse) {
+                      if (parent.popupOpen) parent.close()
+                      else if (Date.now() - parent.lastClosedAt > 150) {
+                        parent.open()
+                      }
+                      mouse.accepted = true
+                    }
+                  }
+
+                  Button {
+                    id: devicePickerOk
+                    parent: devicePicker.Overlay.overlay || devicePicker
+                    readonly property real buttonSize:
+                      devicePicker.popupRowHeight
+                      + Style.spacing.controlPaddingX - Style.spacing.md * 2
+                    readonly property point popupOrigin: parent
+                      ? devicePicker.mapToItem(
+                        parent, 0, devicePicker.height + Style.spacing.xxs)
+                      : Qt.point(0, 0)
+                    visible: devicePicker.popupOpen
+                    x: popupOrigin.x + devicePicker.width - width
+                      - Border.right(devicePicker.popupBorderSpec)
+                      - Style.spacing.hairline - Style.spacing.md
+                    y: popupOrigin.y + Border.top(devicePicker.popupBorderSpec)
+                      + Style.spacing.hairline + Style.spacing.md
+                    width: buttonSize
+                    height: buttonSize
+                    z: 10000
+                    text: "OK"
+                    bordered: true
+                    foreground: root.success
+                    fontFamily: root.fontFamily
+                    fontSize: Style.font.caption
+                    horizontalPadding: 0
+                    verticalPadding: 0
+                    onClicked: devicePicker.close()
+                  }
+                }
+
+                Text {
+                  width: parent.width
+                  text: devicePicker.values.length === 0
+                    ? "Local only: this folder will not synchronize with another device."
+                    : "Selected devices receive a share offer and may need to accept it."
+                  color: devicePicker.values.length === 0 ? root.warning : root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  wrapMode: Text.WordWrap
+                }
+
+                Text {
+                  visible: root.syncthing
+                    && root.syncthing.folderPreparationError !== ""
+                  width: parent.width
+                  text: root.syncthing
+                    ? root.syncthing.folderPreparationError : ""
+                  color: root.urgent
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  wrapMode: Text.WordWrap
+                }
+
+                Button {
+                  width: parent.width
+                  text: root.syncthing && root.syncthing.folderMutationBusy
+                    && root.syncthing.folderMutationAction === "add"
+                    ? "ADDING..." : "ADD FOLDER"
+                  bordered: true
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                  enabled: root.syncthing && root.syncthing.online
+                    && !root.syncthing.folderMutationBusy
+                    && String(addPathField.text || "").trim() !== ""
+                    && String(addIdField.text || "").trim() !== ""
+                  onClicked: root.submitAddFolder()
+                }
+              }
             }
 
             Text {
@@ -496,6 +1262,7 @@ Panel {
               foreground: root.foreground
               fontFamily: root.fontFamily
               enabled: root.syncthing && !root.syncthing.refreshing
+                && !root.syncthing.folderMutationBusy
               onClicked: root.syncthing.refresh()
             }
 
@@ -525,6 +1292,117 @@ Panel {
             visible: root.moreOpen
             width: parent.width
             spacing: Style.space(8)
+
+            PanelSectionHeader {
+              text: "FOLDERS"
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+            }
+
+            RowLayout {
+              width: parent.width
+              spacing: Style.space(6)
+
+              ToggleDropdown {
+                id: folderSelector
+                visible: root.folderRows.length > 0
+                Layout.fillWidth: true
+                Layout.preferredHeight: Style.space(28)
+                showLabel: false
+                rowHeight: Style.space(28)
+                value: root.selectedFolderId
+                options: root.folderOptions()
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onChanged: function(value) { root.selectedFolderId = value }
+              }
+
+              Button {
+                id: folderLinkButton
+                readonly property var targetFolder: root.selectedFolder()
+                readonly property bool targetBusy: root.syncthing
+                  && root.syncthing.folderMutationBusy
+                  && root.syncthing.folderMutationId === root.selectedFolderId
+                visible: root.folderRows.length > 0
+                Layout.preferredHeight: Style.space(28)
+                text: targetBusy ? "WAIT"
+                  : (targetFolder && targetFolder.paused ? "LINK" : "UNLINK")
+                tooltipText: targetFolder
+                  ? (targetFolder.paused
+                    ? "Resume synchronization for " + targetFolder.label
+                    : "Pause synchronization for " + targetFolder.label)
+                    + "\n" + targetFolder.path
+                  : "Select a folder"
+                bordered: true
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                fontSize: Style.font.caption
+                horizontalPadding: Style.space(6)
+                verticalPadding: Style.space(4)
+                enabled: targetFolder && root.syncthing
+                  && root.syncthing.online && !root.syncthing.folderMutationBusy
+                onClicked: root.syncthing.setFolderLinked(
+                  targetFolder.id, targetFolder.paused)
+              }
+
+              Button {
+                text: "+"
+                Layout.preferredHeight: Style.space(28)
+                tooltipText: root.addOpen ? "Close add folder form" : "Add folder"
+                bordered: true
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                fontSize: Style.font.body
+                horizontalPadding: Style.space(7)
+                verticalPadding: Style.space(3)
+                enabled: root.syncthing && root.syncthing.online
+                  && !root.syncthing.folderMutationBusy
+                onClicked: root.addOpen
+                  ? root.closeAddFolder() : root.openAddFolder()
+              }
+            }
+
+            RowLayout {
+              visible: root.pendingOfferRows.length > 0
+              width: parent.width
+              spacing: Style.space(6)
+
+              ToggleDropdown {
+                id: pendingOfferSelector
+                Layout.fillWidth: true
+                Layout.preferredHeight: Style.space(28)
+                showLabel: false
+                rowHeight: Style.space(28)
+                value: root.selectedPendingOffer
+                options: root.pendingOfferRows
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onChanged: function(value) {
+                  root.selectedPendingOffer = value
+                }
+              }
+
+              Button {
+                text: "ACCEPT"
+                Layout.preferredHeight: Style.space(28)
+                tooltipText: "Prepare this offered folder for local acceptance"
+                bordered: true
+                foreground: root.success
+                fontFamily: root.fontFamily
+                fontSize: Style.font.caption
+                horizontalPadding: Style.space(6)
+                verticalPadding: Style.space(4)
+                enabled: root.syncthing && root.syncthing.online
+                  && !root.syncthing.folderMutationBusy
+                  && root.selectedPendingOffer !== ""
+                onClicked: root.acceptPendingFolderOffer(
+                  root.selectedPendingOffer)
+              }
+            }
+
+            PanelSeparator {
+              foreground: root.foreground
+            }
 
             Row {
               width: parent.width
@@ -623,6 +1501,36 @@ Panel {
           }
         }
       }
+
+        CompactConfirmDialog {
+          id: forgetDialog
+          anchors.fill: parent
+          opened: root.forgetConfirmOpen
+          z: 10
+          message: {
+            var folder = root.selectedFolder()
+            return folder
+              ? "Forget " + folder.label + " (" + folder.id + ")?\n\n"
+                + "This removes only its Syncthing configuration. The "
+                + "directory and data files will not be deleted. "
+                + (folder.markerName === ".stfolder"
+                  ? "Syncthing will also attempt to remove its internal "
+                    + ".stfolder marker. " : "")
+                + "Rejoining the "
+                + "same remote folder requires this exact Folder ID."
+              : "Forget this unlinked folder?"
+          }
+          confirmText: "Forget"
+          background: Color.background
+          foreground: root.foreground
+          selectedText: root.urgent
+          fontFamily: root.fontFamily
+          onCanceled: {
+            root.forgetConfirmOpen = false
+            root.forgetFolderId = ""
+          }
+          onConfirmed: root.confirmForget()
+        }
     }
   }
 
@@ -633,13 +1541,18 @@ Panel {
     readonly property bool problem: folder && folder.problem
     readonly property bool syncing: folder && folder.syncing
     readonly property bool canOpen: folder && String(folder.path || "") !== ""
+    readonly property bool selected: folder
+      && String(folder.id || "") === root.selectedFolderId
     readonly property color stateColor: problem
       ? root.urgent : (syncing ? root.foreground : root.dim)
+    readonly property color linkColor: folder && folder.paused
+      ? root.warning : root.success
 
     implicitHeight: row.implicitHeight + Style.space(14)
     color: rowMouse.containsMouse
       ? Style.hoverFillFor(stateColor, Color.accent) : "transparent"
-    borderSpec: Border.controlSpec("normal", stateColor, Color.accent)
+    borderSpec: Border.controlSpec(
+      selected ? "focus" : "normal", stateColor, Color.accent)
     radius: Style.cornerRadius
 
     MouseArea {
@@ -654,6 +1567,7 @@ Panel {
 
     RowLayout {
       id: row
+      z: 1
       anchors.fill: parent
       anchors.margins: Style.space(8)
       spacing: Style.space(8)
@@ -704,28 +1618,42 @@ Panel {
 
       ColumnLayout {
         spacing: Style.space(4)
-        Layout.alignment: Qt.AlignVCenter
+        Layout.alignment: Qt.AlignTop | Qt.AlignRight
 
         BorderSurface {
           implicitWidth: statusLabel.implicitWidth + Style.space(10)
           implicitHeight: statusLabel.implicitHeight + Style.space(4)
           color: "transparent"
           borderSpec: Border.controlSpec(
-            "normal", folderRow.stateColor, Color.accent)
+            "normal", folderRow.linkColor, Color.accent)
           radius: Style.cornerRadius
           Layout.alignment: Qt.AlignRight
 
           Text {
             id: statusLabel
             anchors.centerIn: parent
-            text: root.folderStatus(folderRow.folder)
-            color: folderRow.stateColor
+            text: root.folderLinkState(folderRow.folder)
+            color: folderRow.linkColor
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
             font.bold: true
           }
         }
 
+        Button {
+          visible: folderRow.folder && folderRow.folder.paused
+          text: "FORGET"
+          tooltipText: "Remove only this unlinked Syncthing configuration"
+          bordered: true
+          foreground: root.urgent
+          fontFamily: root.fontFamily
+          fontSize: Style.font.caption
+          horizontalPadding: Style.space(5)
+          verticalPadding: Style.space(2)
+          enabled: root.syncthing && !root.syncthing.folderMutationBusy
+          Layout.alignment: Qt.AlignRight
+          onClicked: root.requestForget(folderRow.folder)
+        }
       }
     }
   }
