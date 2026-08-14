@@ -15,6 +15,8 @@ Panel {
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color urgent: bar ? bar.urgent : Color.urgent
   readonly property color warning: "#ebcb8b"
+  readonly property color success: "#a3be8c"
+  readonly property color syncthingBlue: "#26B6DB"
   readonly property color dim: Qt.darker(foreground, 1.5)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property string homePath: Quickshell.env("HOME")
@@ -26,7 +28,7 @@ Panel {
   readonly property int pausedFolderCount: folderStateCount("paused")
   readonly property bool busy: syncthing
     ? syncthing.refreshing || syncthing.syncingFolderCount > 0
-      || scanningFolderCount > 0
+      || scanningFolderCount > 0 || syncthing.syncingFiles.length > 0
     : false
   readonly property bool hasProblems: syncthing
     ? syncthing.folderProblemCount > 0 : false
@@ -51,6 +53,14 @@ Panel {
   }
   readonly property string visibleWarning: syncthing
     ? syncthing.recoveryWarning : ""
+  readonly property string visibleSyncActivity: syncthing
+    ? syncthing.syncActivity : ""
+  readonly property string visibleSyncDots: syncthing
+    ? syncthing.syncActivityDots : ""
+  readonly property string visibleSyncAction: syncthing
+    ? syncthing.syncActivityAction : ""
+  readonly property string visibleSyncDetail: syncthing
+    ? syncthing.syncActivityDetail : ""
   readonly property string heroMeta: {
     if (!syncthing) return "Service unavailable"
     if (syncthing.installationState === "missing") {
@@ -68,6 +78,7 @@ Panel {
     if (hasProblems) return syncthing.folderProblemCount + " folder"
       + (syncthing.folderProblemCount === 1 ? " needs" : "s need")
       + " attention"
+    if (root.visibleSyncActivity !== "") return "Synchronizing"
     if (syncthing.syncingFolderCount > 0) return syncthing.syncingFolderCount
       + " folder" + (syncthing.syncingFolderCount === 1 ? " is" : "s are")
       + " syncing"
@@ -81,6 +92,12 @@ Panel {
   function configureService() {
     if (!syncthing) return
     syncthing.setRefreshInterval(setting("refreshIntervalSec", 60))
+  }
+
+  function syncActivityColor(action) {
+    if (action === "removing") return urgent
+    if (action === "upload") return success
+    return syncthingBlue
   }
 
   function buildFolderRows() {
@@ -346,6 +363,52 @@ Panel {
             wrapMode: Text.WordWrap
           }
 
+          Row {
+            visible: root.visibleWarning === "" && root.visibleSyncActivity !== ""
+            width: parent.width
+            spacing: 0
+
+            Text {
+              id: syncActivityLabel
+              text: "File syncing"
+              color: root.syncthingBlue
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.bodySmall
+            }
+
+            Item {
+              id: syncDotsSlot
+              width: syncDotsProbe.implicitWidth
+              height: syncDotsProbe.implicitHeight
+
+              Text {
+                text: root.visibleSyncDots
+                color: root.syncthingBlue
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+              }
+
+              Text {
+                id: syncDotsProbe
+                visible: false
+                text: "..."
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+              }
+            }
+
+            Text {
+              width: Math.max(0, parent.width - syncActivityLabel.implicitWidth
+                - syncDotsSlot.width)
+              text: " " + root.visibleSyncDetail
+              color: root.syncActivityColor(root.visibleSyncAction)
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.bodySmall
+              elide: Text.ElideRight
+              wrapMode: Text.NoWrap
+            }
+          }
+
           Text {
             visible: root.visibleError !== ""
             width: parent.width
@@ -551,7 +614,7 @@ Panel {
           }
 
           Text {
-            text: "R  REFRESH   ·   W  WEB UI   ·   P  START/STOP   ·   M  MORE"
+            text: "REFRESH (R)  WEB UI (W)  START/STOP (P)  MORE (M)"
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption

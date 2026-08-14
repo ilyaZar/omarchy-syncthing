@@ -18,6 +18,8 @@ QtObject {
   property var folders: []
   property var folderStatuses: ({})
   property string localDeviceId: ""
+  property var syncingFiles: []
+  property var syncActions: ({})
 
   property string installationState: "checking"
   property string installationLabel: "Checking"
@@ -33,6 +35,26 @@ QtObject {
   readonly property string recoveryWarning: _recoveryActive
     ? (_apiKey ? "Refreshing Syncthing state" : "Trying to find local API key")
       + [".", "..", "..."][_recoveryDotCount] : ""
+  readonly property string syncActivityDots: syncingFiles.length > 0
+    ? [".", "..", "..."][_syncDotCount] : ""
+  readonly property string syncActivityPath: syncingFiles.length > 0
+    ? syncingFiles[_syncFileIndex % syncingFiles.length] : ""
+  readonly property string syncActivityFileName: syncingFiles.length > 0
+    ? displayFileName(syncActivityPath) : ""
+  readonly property string syncActivityAction: syncingFiles.length > 0
+    ? String(syncActions["p|" + syncActivityPath] || "syncing") : ""
+  readonly property string syncActivityDetail: {
+    if (!syncActivityFileName) return ""
+    if (syncActivityAction === "removing") {
+      return "Removing " + syncActivityFileName
+    }
+    if (syncActivityAction === "upload") {
+      return "Upload " + syncActivityFileName
+    }
+    return syncActivityFileName
+  }
+  readonly property string syncActivity: syncingFiles.length > 0
+    ? "File syncing" + syncActivityDots + " " + syncActivityDetail : ""
 
   property string _apiKey: ""
   property bool _recoveryActive: false
@@ -44,6 +66,18 @@ QtObject {
   property int _generation: 0
   property int _pendingRequests: 0
   property bool _connectionRefreshing: false
+  property var _localSyncFiles: []
+  property var _remoteSyncFiles: ({})
+  property var _changeSyncFiles: []
+  property var _changeSyncActions: ({})
+  property var _pendingSyncDeletes: []
+  property int _syncDotCount: 0
+  property int _syncFileIndex: 0
+  property int _syncEventSince: 0
+  property bool _syncEventsInitialized: false
+  property bool _syncEventPolling: false
+  property int _syncEventGeneration: 0
+  property var _syncEventRequest: null
   property var _requests: []
   property string _keyOutput: ""
   property string _packageOutput: ""
@@ -74,6 +108,11 @@ QtObject {
     var value = String(url || "")
     if (value.indexOf("file://") === 0) value = value.slice(7)
     return decodeURIComponent(value)
+  }
+
+  function displayFileName(path) {
+    var parts = String(path || "").split(/[\\/]/)
+    return parts.length ? parts[parts.length - 1] : ""
   }
 
   function countConnectedDevices() {
@@ -189,6 +228,7 @@ QtObject {
     folders = []
     folderStatuses = ({})
     localDeviceId = ""
+    stopSyncEvents()
     phase = nextPhase
     lastError = ""
   }
@@ -415,6 +455,291 @@ QtObject {
     }, false)
   }
 
+  function rebuildSyncingFiles() {
+    var result = []
+    var seen = ({})
+    var actions = ({})
+
+    function append(names, action, actionMap) {
+      for (var i = 0; i < names.length; i++) {
+        var name = String(names[i] || "")
+        var nextAction = actionMap
+          ? String(actionMap["p|" + name] || action) : action
+        if (name && !seen[name]) {
+          seen[name] = true
+          result.push(name)
+        }
+        var key = "p|" + name
+        if (name && root.syncActionPriority(nextAction)
+            > root.syncActionPriority(actions[key])) actions[key] = nextAction
+      }
+    }
+
+    append(_localSyncFiles, "syncing")
+    var keys = Object.keys(_remoteSyncFiles)
+    for (var i = 0; i < keys.length; i++) {
+      append(_remoteSyncFiles[keys[i]], "upload")
+    }
+    append(_changeSyncFiles, "syncing", _changeSyncActions)
+    syncingFiles = result
+    syncActions = actions
+    if (_syncFileIndex >= result.length) _syncFileIndex = 0
+  }
+
+  function syncActionPriority(action) {
+    if (action === "removing") return 3
+    if (action === "upload") return 2
+    if (action === "syncing") return 1
+    return 0
+  }
+
+  function noteSyncChange(path, action) {
+    var name = String(path || "")
+    if (!name) return
+
+    var next = _changeSyncFiles.slice()
+    var nextActions = ({})
+    var actionKeys = Object.keys(_changeSyncActions)
+    for (var i = 0; i < actionKeys.length; i++) {
+      nextActions[actionKeys[i]] = _changeSyncActions[actionKeys[i]]
+    }
+    var existing = next.indexOf(name)
+    if (existing >= 0) next.splice(existing, 1)
+    next.push(name)
+    nextActions["p|" + name] = action || "syncing"
+    while (next.length > 12) {
+      var removed = next.shift()
+      delete nextActions["p|" + removed]
+    }
+    _changeSyncFiles = next
+    _changeSyncActions = nextActions
+    syncChangeHoldTimer.restart()
+  }
+
+  function forgetSyncChange(path) {
+    var name = String(path || "")
+    var next = _changeSyncFiles.slice()
+    var existing = next.indexOf(name)
+    if (existing >= 0) next.splice(existing, 1)
+
+    var nextActions = ({})
+    var actionKeys = Object.keys(_changeSyncActions)
+    for (var i = 0; i < actionKeys.length; i++) {
+      if (actionKeys[i] !== "p|" + name) {
+        nextActions[actionKeys[i]] = _changeSyncActions[actionKeys[i]]
+      }
+    }
+    _changeSyncFiles = next
+    _changeSyncActions = nextActions
+    rebuildSyncingFiles()
+  }
+
+  function hasVisibleMoveTarget(path) {
+    var name = displayFileName(path)
+    if (!name) return false
+    for (var i = 0; i < _changeSyncFiles.length; i++) {
+      var candidate = String(_changeSyncFiles[i] || "")
+      if (candidate !== path && displayFileName(candidate) === name) return true
+    }
+    return false
+  }
+
+  function processOrDelaySyncChange(event) {
+    var data = (event || {}).data || ({})
+    if (String(data.action || "") === "deleted") {
+      var next = _pendingSyncDeletes.slice()
+      next.push(event)
+      _pendingSyncDeletes = next
+      syncDeleteDelayTimer.restart()
+    } else {
+      processSyncEvent(event)
+    }
+  }
+
+  function processPendingSyncDeletes() {
+    var events = _pendingSyncDeletes
+    _pendingSyncDeletes = []
+    for (var i = 0; i < events.length; i++) {
+      processSyncEvent(events[i])
+    }
+  }
+
+  function inspectIndexedFile(folder, path, onFinished) {
+    fetch("getFileInfo", {
+      query: { folder: folder, file: path }
+    }, function(data) {
+      var local = (data || {}).local || ({})
+      if (String(local.type || "") !== "FILE_INFO_TYPE_FILE") {
+        onFinished(null)
+        return
+      }
+      onFinished({
+        type: "LocalChangeDetected",
+        data: {
+          action: local.deleted === true ? "deleted" : "modified",
+          folder: folder,
+          path: path,
+          type: "file"
+        }
+      })
+    }, function() {
+      onFinished(null)
+    }, false)
+  }
+
+  function processLocalIndexUpdate(event) {
+    var data = (event || {}).data || ({})
+    var folder = String(data.folder || "")
+    var filenames = data.filenames instanceof Array ? data.filenames : []
+    var names = []
+    for (var i = Math.max(0, filenames.length - 12);
+        i < filenames.length; i++) {
+      var name = String(filenames[i] || "")
+      if (name) names.push(name)
+    }
+    if (!folder || names.length === 0) return
+
+    var remaining = names.length
+    var changes = []
+    function finish(change) {
+      if (change) changes.push(change)
+      remaining--
+      if (remaining > 0) return
+      for (var j = 0; j < changes.length; j++) {
+        root.processOrDelaySyncChange(changes[j])
+      }
+    }
+    for (var k = 0; k < names.length; k++) {
+      inspectIndexedFile(folder, names[k], finish)
+    }
+  }
+
+  function processSyncEvents(events) {
+    for (var i = 0; i < events.length; i++) {
+      var type = String((events[i] || {}).type || "")
+      if (type === "LocalChangeDetected" || type === "RemoteChangeDetected") {
+        processOrDelaySyncChange(events[i])
+      } else if (type === "LocalIndexUpdated") {
+        processLocalIndexUpdate(events[i])
+      } else {
+        processSyncEvent(events[i])
+      }
+    }
+  }
+
+  function processSyncEvent(event) {
+    var type = String((event || {}).type || "")
+    var data = (event || {}).data || ({})
+
+    if (type === "DownloadProgress") {
+      var local = []
+      var folders = Object.keys(data)
+      for (var i = 0; i < folders.length; i++) {
+        local = local.concat(Object.keys(data[folders[i]] || ({})))
+      }
+      _localSyncFiles = local
+    } else if (type === "RemoteDownloadProgress") {
+      var next = ({})
+      var keys = Object.keys(_remoteSyncFiles)
+      for (var j = 0; j < keys.length; j++) next[keys[j]] = _remoteSyncFiles[keys[j]]
+      var key = String(data.device || "") + "|" + String(data.folder || "")
+      var names = Object.keys(data.state || ({}))
+      if (names.length > 0) next[key] = names
+      else delete next[key]
+      _remoteSyncFiles = next
+    } else if (type === "DeviceDisconnected") {
+      var device = String(data.id || data.device || "")
+      var remaining = ({})
+      var remoteKeys = Object.keys(_remoteSyncFiles)
+      for (var k = 0; k < remoteKeys.length; k++) {
+        if (remoteKeys[k].indexOf(device + "|") !== 0) {
+          remaining[remoteKeys[k]] = _remoteSyncFiles[remoteKeys[k]]
+        }
+      }
+      _remoteSyncFiles = remaining
+    } else if (type === "LocalChangeDetected"
+        || type === "RemoteChangeDetected") {
+      if (!data.type || data.type === "file") {
+        var path = String(data.path || "")
+        var isDeleted = String(data.action || "") === "deleted"
+        if (isDeleted && hasVisibleMoveTarget(path)) {
+          forgetSyncChange(data.path)
+          return
+        }
+        var action = isDeleted ? "removing" : "syncing"
+        noteSyncChange(data.path, action)
+      }
+    } else if (type === "ItemStarted" || type === "ItemFinished") {
+      if (!data.type || data.type === "file") {
+        noteSyncChange(data.item,
+          String(data.action || "") === "delete" ? "removing" : "syncing")
+      }
+    }
+    rebuildSyncingFiles()
+  }
+
+  function pollSyncEvents() {
+    if (_syncEventPolling || !_apiKey || !canUseRuntime
+        || (serviceAvailable && !serviceActive)) return
+
+    var generation = _syncEventGeneration
+    var query = {
+      events: "DownloadProgress,RemoteDownloadProgress,DeviceDisconnected,"
+        + "LocalChangeDetected,RemoteChangeDetected,LocalIndexUpdated,"
+        + "ItemStarted,ItemFinished",
+      timeout: _syncEventsInitialized ? 5 : 0
+    }
+    if (_syncEventsInitialized) query.since = _syncEventSince
+    else query.limit = 1
+
+    _syncEventPolling = true
+    _syncEventRequest = Api.request(baseUrl, _apiKey, "getEvents", {
+      query: query
+    }, function(data) {
+      if (generation !== root._syncEventGeneration) return
+      root._syncEventPolling = false
+      root._syncEventRequest = null
+      var events = data instanceof Array ? data : []
+      if (!root._syncEventsInitialized) {
+        root._syncEventsInitialized = true
+      } else {
+        root.processSyncEvents(events)
+      }
+      if (events.length > 0) {
+        root._syncEventSince = Number(events[events.length - 1].id || 0)
+      }
+    }, function() {
+      if (generation !== root._syncEventGeneration) return
+      root._syncEventPolling = false
+      root._syncEventRequest = null
+    })
+  }
+
+  function stopSyncEvents() {
+    _syncEventGeneration++
+    if (_syncEventRequest) {
+      try {
+        _syncEventRequest.abort()
+      } catch (error) {
+      }
+    }
+    _syncEventRequest = null
+    _syncEventPolling = false
+    _syncEventsInitialized = false
+    _syncEventSince = 0
+    _localSyncFiles = []
+    _remoteSyncFiles = ({})
+    _changeSyncFiles = []
+    _changeSyncActions = ({})
+    _pendingSyncDeletes = []
+    syncDeleteDelayTimer.stop()
+    syncChangeHoldTimer.stop()
+    syncingFiles = []
+    syncActions = ({})
+    _syncDotCount = 0
+    _syncFileIndex = 0
+  }
+
   property Timer refreshTimer: Timer {
     interval: root.refreshIntervalSec * 1000
     repeat: true
@@ -489,6 +814,44 @@ QtObject {
     onTriggered: if (!root._recoveryActive) root.refreshConnections()
   }
 
+  property Timer syncEventTimer: Timer {
+    interval: 500
+    repeat: true
+    running: true
+    onTriggered: root.pollSyncEvents()
+  }
+
+  property Timer syncAnimationTimer: Timer {
+    interval: 400
+    repeat: true
+    running: root.syncingFiles.length > 0
+    onTriggered: root._syncDotCount = (root._syncDotCount + 1) % 3
+  }
+
+  property Timer syncFileTimer: Timer {
+    interval: 2500
+    repeat: true
+    running: root.syncingFiles.length > 1
+    onTriggered: root._syncFileIndex = (root._syncFileIndex + 1)
+      % root.syncingFiles.length
+  }
+
+  property Timer syncChangeHoldTimer: Timer {
+    interval: 7000
+    repeat: false
+    onTriggered: {
+      root._changeSyncFiles = []
+      root._changeSyncActions = ({})
+      root.rebuildSyncingFiles()
+    }
+  }
+
+  property Timer syncDeleteDelayTimer: Timer {
+    interval: 1500
+    repeat: false
+    onTriggered: root.processPendingSyncDeletes()
+  }
+
   property Process apiKeyProcess: Process {
     id: apiKeyProcess
     command: []
@@ -561,6 +924,7 @@ QtObject {
     _generation++
     abortRequests()
     stopRecovery()
+    stopSyncEvents()
     _apiKey = ""
   }
 }
