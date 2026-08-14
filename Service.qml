@@ -233,7 +233,7 @@ QtObject {
     lastError = ""
   }
 
-  function fetchFolder(folderId) {
+  function fetchFolder(folderId, showProgress) {
     fetch("getFolderStatus", { query: { folder: folderId } }, function(data) {
       root.setFolderStatus(folderId, data || ({}))
     }, function(error) {
@@ -241,7 +241,15 @@ QtObject {
         state: "error",
         error: error.message
       })
-    })
+    }, showProgress)
+  }
+
+  function refreshFolderStatuses(showProgress) {
+    if (!_apiKey || !canUseRuntime
+        || (serviceAvailable && !serviceActive)) return
+    for (var i = 0; i < folders.length; i++) {
+      fetchFolder(folders[i].id, showProgress)
+    }
   }
 
   function setFolderStatus(folderId, status) {
@@ -456,6 +464,7 @@ QtObject {
   }
 
   function rebuildSyncingFiles() {
+    var wasSyncing = syncingFiles.length > 0
     var result = []
     var seen = ({})
     var actions = ({})
@@ -484,6 +493,7 @@ QtObject {
     syncingFiles = result
     syncActions = actions
     if (_syncFileIndex >= result.length) _syncFileIndex = 0
+    if (wasSyncing && result.length === 0) refreshFolderStatuses(false)
   }
 
   function syncActionPriority(action) {
@@ -569,7 +579,12 @@ QtObject {
       query: { folder: folder, file: path }
     }, function(data) {
       var local = (data || {}).local || ({})
-      if (String(local.type || "") !== "FILE_INFO_TYPE_FILE") {
+      var type = String(local.type || "")
+      if (type === "FILE_INFO_TYPE_DIRECTORY" && local.deleted !== true) {
+        onFinished({ directoryPath: path })
+        return
+      }
+      if (type !== "FILE_INFO_TYPE_FILE") {
         onFinished(null)
         return
       }
@@ -587,6 +602,13 @@ QtObject {
     }, false)
   }
 
+  function scanIndexedDirectory(folder, path) {
+    fetch("scanFolder", {
+      method: "POST",
+      query: { folder: folder, sub: path }
+    }, function() {}, function() {}, false)
+  }
+
   function processLocalIndexUpdate(event) {
     var data = (event || {}).data || ({})
     var folder = String(data.folder || "")
@@ -601,16 +623,26 @@ QtObject {
 
     var remaining = names.length
     var changes = []
+    var directories = []
     function finish(change) {
-      if (change) changes.push(change)
+      if (change && change.directoryPath) {
+        directories.push(change.directoryPath)
+      } else if (change) {
+        changes.push(change)
+      }
       remaining--
       if (remaining > 0) return
-      for (var j = 0; j < changes.length; j++) {
-        root.processOrDelaySyncChange(changes[j])
+      if (changes.length === 0) {
+        for (var j = 0; j < directories.length; j++) {
+          root.scanIndexedDirectory(folder, directories[j])
+        }
+      }
+      for (var k = 0; k < changes.length; k++) {
+        root.processOrDelaySyncChange(changes[k])
       }
     }
-    for (var k = 0; k < names.length; k++) {
-      inspectIndexedFile(folder, names[k], finish)
+    for (var m = 0; m < names.length; m++) {
+      inspectIndexedFile(folder, names[m], finish)
     }
   }
 
