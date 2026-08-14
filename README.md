@@ -25,8 +25,9 @@ installs the official Arch package through `omarchy pkg add syncthing`, so it
 follows normal system updates. A terminal shows every step and waits for Enter
 when it finishes.
 
-The square **?** beside **Installation** explains what the plugin manages and
-what it preserves.
+After installation, the plugin treats Syncthing like any other existing
+installation. It does not retain package ownership or offer package removal.
+The square **?** beside **Installation** summarizes this policy.
 
 After the first start, select **Open Web UI** to add devices and folders.
 
@@ -48,11 +49,18 @@ the final directory visible.
 | `P` | start or stop syncing |
 | `M` | show or hide More     |
 
-## Uninstall
+## Remove Syncthing
 
-Open **More**, select **Uninstall Syncthing**, and confirm. The package is
-removed through Omarchy. Syncthing configuration, shared folders, and their
-files are never removed.
+Remove Syncthing manually with the method that installed it. For the official
+package installed by this plugin:
+
+```bash
+systemctl --user disable --now syncthing.service
+omarchy pkg drop syncthing
+```
+
+These commands do not remove Syncthing configuration, shared folders, or their
+files.
 
 Remove the plugin separately:
 
@@ -60,9 +68,10 @@ Remove the plugin separately:
 omarchy plugin remove io.github.ilyazar.syncthing --yes
 ```
 
-The plugin refuses to adopt or remove an existing unrecorded Syncthing
-installation. Remove that installation first, then use the installer in the
-widget.
+Removing the plugin never removes Syncthing. The plugin monitors any Syncthing
+installation found on the command path, shows its resolved executable, and can
+control an existing `syncthing.service`. Installation is offered only when no
+Syncthing executable or conflicting installation files are found.
 
 ## Security and license
 
