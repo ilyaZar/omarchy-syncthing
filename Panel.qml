@@ -57,7 +57,6 @@ Panel {
     if (syncthing.serviceAvailable && !syncthing.serviceActive) return "pause"
     if (syncthing.phase === "error" || hasProblems) return "notify"
     if (busy) return "sync"
-    if (pausedFolderCount > 0) return "pause"
     return "default"
   }
   readonly property url syncthingIconSource: Qt.resolvedUrl(
