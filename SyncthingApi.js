@@ -4,9 +4,11 @@
 var Endpoints = {
   getDevices: "/rest/config/devices",
   getFolders: "/rest/config/folders",
+  getFileInfo: "/rest/db/file",
   getFolderStatus: "/rest/db/status",
   getConnections: "/rest/system/connections",
-  getSystemStatus: "/rest/system/status"
+  getSystemStatus: "/rest/system/status",
+  getEvents: "/rest/events"
 }
 
 function queryString(values) {
