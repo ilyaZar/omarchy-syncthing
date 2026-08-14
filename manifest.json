@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.ilyazar.syncthing",
   "name": "Syncthing",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "ilyaZar",
   "license": "MIT AND MPL-2.0",
   "description": "See sync health, open folders, control the service, and install Syncthing from the Omarchy bar.",
