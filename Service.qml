@@ -45,11 +45,12 @@ QtObject {
   readonly property bool serviceActive: _desiredServiceState === -1
     ? serviceRunning : _desiredServiceState === 1
   readonly property bool serviceActionRunning: controlProcess.running
+  readonly property bool canUseRuntime: installationState === "existing"
+    && executablePath !== ""
+  readonly property bool canControlService: canUseRuntime && serviceAvailable
   readonly property bool lifecycleBusy: packageRefreshing || packageActionRunning
     || serviceActionRunning
   readonly property bool canInstall: installationState === "missing"
-    && !lifecycleBusy
-  readonly property bool canUninstall: installationState === "managed"
     && !lifecycleBusy
   readonly property int folderCount: folders.length
   readonly property int deviceCount: devices.length
@@ -100,8 +101,9 @@ QtObject {
 
   function summary() {
     if (installationState === "missing") return "Syncthing is not installed"
-    if (installationState === "external") return "Existing installation found"
-    if (installationState === "broken") return "Installation needs cleanup"
+    if (installationState === "incomplete") {
+      return "Installation needs cleanup"
+    }
     if (serviceAvailable && !serviceActive) return "Syncing stopped"
     if (phase === "discovering") return "Finding Syncthing"
     if (phase === "loading") return "Reading status"
@@ -126,7 +128,7 @@ QtObject {
 
   function refreshApi() {
     if (installationState === "checking") return
-    if (installationState !== "managed") {
+    if (!canUseRuntime) {
       stopApi(installationState)
       return
     }
@@ -274,7 +276,7 @@ QtObject {
     }
 
     var state = String(data.state || "")
-    if (["managed", "external", "broken", "missing"].indexOf(state) < 0) {
+    if (["existing", "incomplete", "missing"].indexOf(state) < 0) {
       packageError = "Syncthing installation status is invalid"
       return false
     }
@@ -306,39 +308,28 @@ QtObject {
       packageMessageTimer.restart()
     }
 
-    if (state !== "managed") stopApi(state)
+    var canUseRuntime = state === "existing" && executablePath !== ""
+    if (!canUseRuntime) stopApi(state)
     else if (serviceAvailable && !serviceActive) stopApi("stopped")
     else if (!_apiKey && !apiKeyProcess.running) refreshApi()
     return true
   }
 
   function installSyncthing() {
-    runPackageAction("install")
-  }
-
-  function uninstallSyncthing() {
-    runPackageAction("uninstall")
-  }
-
-  function runPackageAction(action) {
-    var allowed = action === "install" ? canInstall : canUninstall
-    if (!allowed) return
+    if (!canInstall) return
 
     packageActionRunning = true
     packageError = ""
-    packageStatus = action === "install"
-      ? "Complete installation in the Omarchy terminal"
-      : "Complete removal in the Omarchy terminal"
+    packageStatus = "Complete installation in the Omarchy terminal"
     operationPollTimer.ticks = 0
     _operationSeen = false
     operationPollTimer.start()
-    var command = ["bash", helperPath, action]
+    var command = ["bash", helperPath, "install"]
     Quickshell.execDetached(command)
   }
 
   function toggleService() {
-    if (installationState !== "managed" || !serviceAvailable
-        || controlProcess.running) return
+    if (!canControlService || controlProcess.running) return
     var start = !serviceActive
     _desiredServiceState = start ? 1 : 0
     controlError = ""

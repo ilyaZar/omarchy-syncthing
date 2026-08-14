@@ -18,7 +18,6 @@ Panel {
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property string homePath: Quickshell.env("HOME")
   property bool moreOpen: false
-  property bool uninstallConfirmOpen: false
   readonly property var folderRows: buildFolderRows()
   readonly property double trackedBytes: folderTotal("globalBytes")
   readonly property int trackedFiles: folderTotal("globalFiles")
@@ -31,7 +30,7 @@ Panel {
   readonly property bool hasProblems: syncthing
     ? syncthing.folderProblemCount > 0 : false
   readonly property string iconVariant: {
-    if (!syncthing || syncthing.installationState !== "managed") return "notify"
+    if (!syncthing || !syncthing.canUseRuntime) return "notify"
     if (syncthing.serviceAvailable && !syncthing.serviceActive) return "pause"
     if (syncthing.phase === "error" || hasProblems) return "notify"
     if (busy) return "sync"
@@ -54,10 +53,7 @@ Panel {
     if (syncthing.installationState === "missing") {
       return "Syncthing is not installed"
     }
-    if (syncthing.installationState === "external") {
-      return "Remove the existing installation to continue"
-    }
-    if (syncthing.installationState === "broken") {
+    if (syncthing.installationState === "incomplete") {
       return "Installation needs cleanup"
     }
     if (syncthing.serviceAvailable && !syncthing.serviceActive) {
@@ -197,8 +193,7 @@ Panel {
   }
 
   function toggleSyncing() {
-    if (syncthing && syncthing.installationState === "managed"
-        && syncthing.serviceAvailable
+    if (syncthing && syncthing.canControlService
         && !syncthing.serviceActionRunning) syncthing.toggleService()
   }
 
@@ -212,7 +207,6 @@ Panel {
   onSettingsChanged: configureService()
   onOpenedChanged: if (opened) {
     if (syncthing) syncthing.refresh()
-    uninstallConfirmOpen = false
     if (panelFlick) panelFlick.contentY = 0
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
@@ -292,8 +286,7 @@ Panel {
             width: parent.width
             implicitHeight: hero.implicitHeight
             readonly property bool serviceAvailable: root.syncthing
-              ? root.syncthing.installationState === "managed"
-                && root.syncthing.serviceAvailable : false
+              ? root.syncthing.canControlService : false
             readonly property bool serviceActive: root.syncthing
               ? root.syncthing.serviceActive : false
             readonly property bool serviceBusy: root.syncthing
@@ -449,7 +442,6 @@ Panel {
             fontFamily: root.fontFamily
             onClicked: {
               root.moreOpen = !root.moreOpen
-              if (!root.moreOpen) root.uninstallConfirmOpen = false
             }
           }
 
@@ -474,8 +466,8 @@ Panel {
                 id: installationHelp
                 implicitWidth: implicitHeight
                 text: "?"
-                tooltipText: "Installs and removes the official package through "
-                  + "Omarchy. Syncthing settings and shared folders stay intact."
+                tooltipText: "Installs the official package through Omarchy "
+                  + "when Syncthing is absent. Removal is manual."
                 foreground: root.foreground
                 fontFamily: root.fontFamily
                 fontSize: Style.font.caption
@@ -504,17 +496,14 @@ Panel {
               width: parent.width
               text: {
                 if (!root.syncthing) return "Installation status unavailable."
-                if (root.syncthing.installationState === "external") {
-                  return "Remove existing Syncthing first."
+                if (root.syncthing.installationState === "existing") {
+                  return "Monitoring this installation. Removal is manual."
                 }
-                if (root.syncthing.installationState === "managed") {
-                  return "Managed through Omarchy package management."
-                }
-                if (root.syncthing.installationState === "broken") {
-                  return "Managed installation files changed."
+                if (root.syncthing.installationState === "incomplete") {
+                  return "Repair or remove the incomplete installation manually."
                 }
                 if (root.syncthing.installationState === "missing") {
-                  return "Uses Omarchy package management."
+                  return "Installs through Omarchy. Removal is manual."
                 }
                 return "Checking installation."
               }
@@ -538,61 +527,13 @@ Panel {
             }
 
             Button {
-              visible: !root.uninstallConfirmOpen
-              text: {
-                if (!root.syncthing) return "Unavailable"
-                if (root.syncthing.installationState === "missing") {
-                  return "Install Syncthing"
-                }
-                if (root.syncthing.installationState === "managed") {
-                  return "Uninstall Syncthing"
-                }
-                if (root.syncthing.installationState === "broken") {
-                  return "Installation changed"
-                }
-                if (root.syncthing.installationState === "external") {
-                  return "Existing installation"
-                }
-                return "Checking"
-              }
+              visible: root.syncthing && root.syncthing.canInstall
+              text: "Install Syncthing"
               bordered: true
               foreground: root.foreground
               fontFamily: root.fontFamily
-              enabled: root.syncthing
-                && (root.syncthing.canInstall || root.syncthing.canUninstall)
-                && !root.syncthing.lifecycleBusy
-              onClicked: {
-                if (root.syncthing.installationState === "missing") {
-                  root.installationAction()
-                } else {
-                  root.uninstallConfirmOpen = true
-                }
-              }
-            }
-
-            Row {
-              visible: root.uninstallConfirmOpen
-              spacing: Style.space(8)
-
-              Button {
-                text: "Cancel"
-                bordered: true
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-                onClicked: root.uninstallConfirmOpen = false
-              }
-
-              Button {
-                text: "Confirm uninstall"
-                bordered: true
-                foreground: root.urgent
-                fontFamily: root.fontFamily
-                enabled: root.syncthing && root.syncthing.canUninstall
-                onClicked: {
-                  root.uninstallConfirmOpen = false
-                  root.syncthing.uninstallSyncthing()
-                }
-              }
+              enabled: root.syncthing && root.syncthing.canInstall
+              onClicked: root.installationAction()
             }
           }
 
