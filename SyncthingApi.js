@@ -1,6 +1,5 @@
 .pragma library
 
-// Keep the plugin's API surface read-only and limited to displayed status.
 var Endpoints = {
   getDevices: "/rest/config/devices",
   getFolders: "/rest/config/folders",
@@ -8,7 +7,8 @@ var Endpoints = {
   getFolderStatus: "/rest/db/status",
   getConnections: "/rest/system/connections",
   getSystemStatus: "/rest/system/status",
-  getEvents: "/rest/events"
+  getEvents: "/rest/events",
+  scanFolder: "/rest/db/scan"
 }
 
 function queryString(values) {
@@ -64,7 +64,7 @@ function request(baseUrl, apiKey, name, options, onSuccess, onError) {
     }
   }
 
-  xhr.open("GET", url, true)
+  xhr.open(String(settings.method || "GET"), url, true)
   xhr.setRequestHeader("Accept", "application/json")
   if (apiKey) xhr.setRequestHeader("X-API-Key", apiKey)
   xhr.onreadystatechange = function() {
@@ -78,6 +78,6 @@ function request(baseUrl, apiKey, name, options, onSuccess, onError) {
   }
   xhr.onerror = function() { fail("Connection failed") }
 
-  xhr.send()
+  xhr.send(settings.body || null)
   return xhr
 }
