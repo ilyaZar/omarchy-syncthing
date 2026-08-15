@@ -53,6 +53,14 @@ directly from the plugin.
 | `Q`   | close the panel           |
 | `Esc` | close the panel           |
 
+## Demo
+
+See a folder added, follow uploads, downloads, updates, and removals, open
+Syncthing's local Web UI, then unlink and forget the folder without deleting its
+files.
+
+<https://github.com/user-attachments/assets/445066ac-68db-4abb-9e2e-68943c348f9b>
+
 ## Manage folders
 
 **UNLINK** pauses a folder; **LINK** resumes it. Both map directly to
