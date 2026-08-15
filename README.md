@@ -29,11 +29,11 @@ advanced folder options. Syncthing ships with the Web UI built in, so no
 separate installation is required. Basic folder management is also available
 directly from the plugin.
 
-**IMPORTANT:** While Syncthing is very powerful, it is somewhat cumbersome to
-set up. The plugin currently only makes folder management a bit easier while the
-full setup is to be done via the Web UI. Hence, carefully read the setup section
-at the very bottom under [Details on setup](#details-on-setup), and use for easy
-access the Open Web UI button to fire up the Syncthing web UI client.
+> [!IMPORTANT]
+> Syncthing is powerful, but its initial setup can be cumbersome. The plugin
+> makes folder management easier, while the full setup remains in the Web UI.
+> Carefully read [Details on setup](#details-on-setup), and use **Open Web UI**
+> for easy access to the Syncthing web interface.
 
 ## Use
 
@@ -61,9 +61,10 @@ access the Open Web UI button to fire up the Syncthing web UI client.
 
 ## Demo
 
-> [!WARNING] The hyprland window next to the plugin (to its left) is **NOT**
-> part of the plugin, but simply live-tracks/streams the current file changes in
-> the `test-source` directory for better understanding.
+> [!WARNING]
+> The Hyprland window to the left of the plugin is **not** part of the plugin. It
+> live-tracks changes in the `test-source` directory to make the demo easier to
+> follow.
 
 See a folder added, follow uploads, downloads, updates, and removals, open
 Syncthing's local Web UI, then unlink and forget the folder without deleting its
