@@ -29,6 +29,12 @@ advanced folder options. Syncthing ships with the Web UI built in, so no
 separate installation is required. Basic folder management is also available
 directly from the plugin.
 
+**IMPORTANT:** While Syncthing is very powerful, it is somewhat cumbersome to
+set up. The plugin currently only makes folder management a bit easier while the
+full setup is to be done via the Web UI. Hence, carefully read the setup section
+at the very bottom under [Details on setup](#details-on-setup), and use for easy
+access the Open Web UI button to fire up the Syncthing web UI client.
+
 ## Use
 
 ### General
@@ -54,6 +60,10 @@ directly from the plugin.
 | `Esc` | close the panel           |
 
 ## Demo
+
+> [!WARNING] The hyprland window next to the plugin (to its left) is **NOT**
+> part of the plugin, but simply live-tracks/streams the current file changes in
+> the `test-source` directory for better understanding.
 
 See a folder added, follow uploads, downloads, updates, and removals, open
 Syncthing's local Web UI, then unlink and forget the folder without deleting its
@@ -108,6 +118,122 @@ Folder management requires Syncthing 1.12.0 or later.
 
 **BROWSE** opens a folder chooser. A path can be entered manually if the chooser
 is unavailable.
+
+## Details on setup
+
+Syncthing requires two separate relationships before files can synchronize:
+
+1. The devices must trust each other.
+2. A specific folder must be shared between those devices.
+
+A successful device connection alone does not synchronize any folders.
+
+### Add the remote device
+
+On one machine, open the Web UI and select **Actions**, then **Show ID**. Copy
+the Device ID. On the other machine, select **Add Remote Device** and enter:
+
+- **Device ID:** the exact ID shown by the other machine
+- **Device name:** a descriptive local name, such as `workstation`
+- **Device group:** optional local organization, such as `Personal devices`
+
+For example, a fictional Device ID looks like this:
+
+```text
+A7B3CDE-F4G5HJK-L6M7NPQ-R2STUVW-X3Y4ZAB-C5D6EFG-H7J2KLM-N3P4QRS
+```
+
+The device name and group are descriptive. A device group only organizes the Web
+UI locally; it does not grant folder access or enable synchronization.
+
+Save the device and accept the resulting device request on the other machine.
+Alternatively, add each machine's Device ID manually on the other machine. The
+devices should then show **Connected**.
+
+See Syncthing's
+[Getting Started guide](https://docs.syncthing.net/intro/getting-started.html)
+and
+[device configuration reference](https://docs.syncthing.net/users/config.html#device-element)
+for more detail.
+
+### Share the folder
+
+On the machine that already owns the folder:
+
+1. Select the folder in the Syncthing Web UI.
+2. Select **Edit**.
+3. Open the **Sharing** tab.
+4. Select the new remote device.
+5. Save.
+
+The receiving machine should display a notification that a folder has been
+offered:
+
+1. Select **Add** or **Accept**.
+2. Choose the local destination path.
+3. Save.
+
+Accept the offered folder instead of independently creating another folder with
+the same label and path. Accepting the offer preserves the shared Folder ID.
+
+### Folder label, path, and ID
+
+A Syncthing folder has three distinct values:
+
+- **Folder label:** a human-readable display name
+- **Folder path:** the directory used on this particular machine
+- **Folder ID:** the identity used to match the folder across devices
+
+Paths and labels may differ between machines. The Folder ID must be identical.
+The safest setup is to create the folder on one machine, share it, and accept
+the offer on every other machine.
+
+For example, these are the same shared folder even though their paths differ:
+
+```text
+workstation  ID: project-files  Path: /home/alex/Documents/project
+laptop       ID: project-files  Path: /home/sam/Sync/project
+```
+
+These are unrelated folders despite using the same path and label:
+
+```text
+workstation  ID: project-files  Path: /home/alex/Sync  Label: Syncthing
+laptop       ID: q7r2m-p5x4k    Path: /home/alex/Sync  Label: Syncthing
+```
+
+See Syncthing's
+[Web UI folder guide](https://docs.syncthing.net/intro/gui.html#creating-a-new-synced-folder)
+for the official explanation of Folder IDs, labels, paths, and device sharing.
+
+### Recover from independently created folders
+
+If both machines already created separate folder identities for the intended
+directory, choose one Folder ID as the canonical identity. Usually this is the
+folder on the machine that already contains the complete data.
+
+On the receiving machine:
+
+1. Remove the unrelated folder from Syncthing configuration.
+2. Do not delete the directory or its files.
+
+On the machine with the canonical folder:
+
+1. Edit the folder.
+2. Open **Sharing**.
+3. Select the receiving device.
+4. Save.
+
+On the receiving machine:
+
+1. Accept the offered canonical folder.
+2. Select the existing local directory as its path.
+3. Confirm that the offered Folder ID is preserved.
+4. Save.
+
+Review both directories and maintain an appropriate backup before merging
+existing data. Once both devices show the same Folder ID and include each other
+under **Sharing**, synchronization can begin.
 
 ## Remove Syncthing
 
