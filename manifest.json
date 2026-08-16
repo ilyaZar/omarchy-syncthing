@@ -2,14 +2,11 @@
   "schemaVersion": 1,
   "id": "io.github.ilyazar.syncthing",
   "name": "Syncthing",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "author": "ilyaZar",
   "license": "MIT AND MPL-2.0",
   "description": "See sync health, safely manage folders, control the service, and install Syncthing from the Omarchy bar.",
-  "kinds": [
-    "service",
-    "bar-widget"
-  ],
+  "kinds": ["service", "bar-widget"],
   "keepLoaded": true,
   "entryPoints": {
     "service": "Service.qml",
