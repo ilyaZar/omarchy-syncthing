@@ -51,12 +51,12 @@ detect_status() {
 
   if [[ -n $executable_path ]]; then
     state="existing"
-    label="Existing installation"
+    label="Existing installation found: working"
   elif [[ $load_state != not-found ||
           -e $bin_link || -L $bin_link || -e $service_file ||
           -L $service_file ]]; then
     state="incomplete"
-    label="Incomplete installation"
+    label="Incomplete installation: non-working"
   fi
 
   jq -n \

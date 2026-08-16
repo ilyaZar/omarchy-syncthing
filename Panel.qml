@@ -1432,8 +1432,19 @@ Panel {
 
             InfoPair {
               label: "Installation"
-              value: root.syncthing
-                ? root.syncthing.installationLabel : "Unavailable"
+              value: {
+                if (!root.syncthing) return "Unavailable"
+                if (root.syncthing.installationState === "existing") {
+                  return "Existing installation found: <font color=\""
+                    + root.success + "\">working</font>"
+                }
+                if (root.syncthing.installationState === "incomplete") {
+                  return "Incomplete installation: <font color=\""
+                    + root.urgent + "\">non-working</font>"
+                }
+                return root.syncthing.installationLabel
+              }
+              valueTextFormat: Text.StyledText
             }
 
             InfoPair {
@@ -1446,11 +1457,12 @@ Panel {
             }
 
             Text {
+              visible: text !== ""
               width: parent.width
               text: {
                 if (!root.syncthing) return "Installation status unavailable."
                 if (root.syncthing.installationState === "existing") {
-                  return "Monitoring this installation. Removal is manual."
+                  return ""
                 }
                 if (root.syncthing.installationState === "incomplete") {
                   return "Repair or remove the incomplete installation manually."
@@ -1661,6 +1673,7 @@ Panel {
     property string label: ""
     property string value: ""
     property int elideMode: Text.ElideRight
+    property int valueTextFormat: Text.PlainText
 
     width: parent ? parent.width : implicitWidth
     spacing: Style.space(8)
@@ -1676,6 +1689,7 @@ Panel {
     Text {
       Layout.fillWidth: true
       text: parent.value
+      textFormat: parent.valueTextFormat
       color: root.foreground
       font.family: root.fontFamily
       font.pixelSize: Style.font.bodySmall
