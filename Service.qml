@@ -6,7 +6,10 @@ import "SyncthingApi.js" as Api
 QtObject {
   id: root
 
-  readonly property string baseUrl: "http://127.0.0.1:8384"
+  readonly property string baseUrl: (_useTls ? "https" : "http")
+    + "://127.0.0.1:8384"
+  readonly property string apiHelperPath: localPath(
+    Qt.resolvedUrl("scripts/syncthing-api.sh"))
   readonly property string helperPath: localPath(
     Qt.resolvedUrl("scripts/syncthing-install.sh"))
   property string phase: "discovering"
@@ -73,6 +76,7 @@ QtObject {
     ? "File syncing" + syncActivityDots + " " + syncActivityDetail : ""
 
   property string _apiKey: ""
+  property bool _useTls: false
   property bool _recoveryActive: false
   property bool _apiKeyFailureLatched: false
   property int _apiKeyAttempts: 0
@@ -393,9 +397,7 @@ QtObject {
     folderPreparationError = ""
     folderIdSuggestion = ""
     try {
-      _folderPreparationRequest = Api.request(
-        baseUrl,
-        _apiKey,
+      _folderPreparationRequest = requestApi(
         "getRandomString",
         { query: { length: 10 } },
         function(data) {
@@ -490,9 +492,7 @@ QtObject {
   function requestFolderMutation(name, options, onSuccess, fallback) {
     var generation = _folderMutationGeneration
     try {
-      _folderMutationRequest = Api.request(
-        baseUrl,
-        _apiKey,
+      _folderMutationRequest = requestApi(
         name,
         options,
         function(data, xhr) {
@@ -836,7 +836,7 @@ QtObject {
       _pendingRequests++
       refreshing = true
     }
-    var xhr = Api.request(baseUrl, _apiKey, name, options, function(data) {
+    var xhr = requestApi(name, options, function(data) {
       if (generation !== root._generation) return
       if (onSuccess) onSuccess(data)
       root.finishRequest(generation, visible)
@@ -849,6 +849,17 @@ QtObject {
     var next = _requests.slice()
     next.push(xhr)
     _requests = next
+  }
+
+  function requestApi(name, options, onSuccess, onError) {
+    if (!_useTls) {
+      return Api.request(baseUrl, _apiKey, name, options, onSuccess, onError)
+    }
+
+    var process = apiRequestComponent.createObject(root)
+    process.startRequest(
+      apiHelperPath, baseUrl, _apiKey, name, options, onSuccess, onError)
+    return process
   }
 
   function finishRequest(generation, visible) {
@@ -906,8 +917,7 @@ QtObject {
       "cli",
       "config",
       "gui",
-      "apikey",
-      "get"
+      "dump-json"
     ]
     apiKeyProcess.running = true
   }
@@ -1305,7 +1315,7 @@ QtObject {
     else query.limit = 1
 
     _syncEventPolling = true
-    _syncEventRequest = Api.request(baseUrl, _apiKey, "getEvents", {
+    _syncEventRequest = requestApi("getEvents", {
       query: query
     }, function(data) {
       if (generation !== root._syncEventGeneration) return
@@ -1541,17 +1551,87 @@ QtObject {
     }
   }
 
+  property Component apiRequestComponent: Component {
+    Process {
+      id: requestProcess
+
+      property var settings
+      property var successCallback
+      property var failureCallback
+      property string output
+      property bool canceled
+
+      stdout: StdioCollector {
+        id: requestStdout
+        waitForEnd: true
+        onStreamFinished: requestProcess.output = text
+      }
+
+      function startRequest(helper, baseUrl, apiKey, name, options,
+          onSuccess, onError) {
+        settings = options
+        successCallback = onSuccess
+        failureCallback = onError
+        environment = ({ SYNCTHING_API_KEY: apiKey })
+        var args = [
+          "bash",
+          helper,
+          settings.method || "GET",
+          Api.requestUrl(baseUrl, name, settings)
+        ]
+        if (settings.json !== undefined) {
+          args.push(JSON.stringify(settings.json))
+        }
+        command = args
+        running = true
+      }
+
+      function abort() {
+        canceled = true
+        if (running) running = false
+        else destroy()
+      }
+
+      onExited: function(exitCode) {
+        if (canceled) {
+          destroy()
+          return
+        }
+        var marker = output.lastIndexOf("\n")
+        var body = output.slice(0, marker)
+        var status = Number(output.slice(marker + 1)) || 0
+        var accepted = settings.acceptStatuses || []
+        if (exitCode === 0 && ((status >= 200 && status < 300)
+            || accepted.indexOf(status) >= 0)) {
+          successCallback(Api.parseBody(body), ({ status: status }))
+        } else {
+          failureCallback({
+            status: status,
+            message: status ? "HTTP " + status : "Connection failed",
+            body: Api.parseBody(body)
+          })
+        }
+        destroy()
+      }
+    }
+  }
+
   property Process apiKeyProcess: Process {
     id: apiKeyProcess
     command: []
     stdout: StdioCollector {
-      id: apiKeyStdout
       waitForEnd: true
       onStreamFinished: root._keyOutput = text
     }
     onExited: function(exitCode) {
-      var key = String(root._keyOutput || apiKeyStdout.text || "").trim()
+      var config = null
+      try {
+        config = JSON.parse(root._keyOutput)
+      } catch (error) {
+      }
+      var key = config ? String(config.apiKey || "").trim() : ""
       if (exitCode === 0 && key) {
+        root._useTls = config.useTLS === true
         root._apiKey = key
         root.apiKeyRetryTimer.stop()
         root._recoveryTicks = 0

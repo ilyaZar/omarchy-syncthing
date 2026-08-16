@@ -47,8 +47,7 @@ function queryString(values) {
   return parts.length ? "?" + parts.join("&") : ""
 }
 
-function parseResponse(xhr) {
-  var text = String(xhr.responseText || "")
+function parseBody(text) {
   if (!text) return null
   var first = text.charAt(0)
   if (first === "{" || first === "[") {
@@ -61,25 +60,25 @@ function parseResponse(xhr) {
   return text
 }
 
+function requestUrl(baseUrl, name, settings) {
+  return baseUrl.replace(/\/$/, "")
+    + endpointPath(name, settings) + queryString(settings.query)
+}
+
 function request(baseUrl, apiKey, name, options, onSuccess, onError) {
-  var settings = options || {}
-  var path = endpointPath(name, settings)
-  var url = String(baseUrl || "").replace(/\/$/, "") + path
-    + queryString(settings.query)
+  var settings = options
+  var url = requestUrl(baseUrl, name, settings)
   var xhr = new XMLHttpRequest()
   var completed = false
 
   function fail(message) {
     if (completed) return
     completed = true
-    if (onError) {
-      onError({
-        endpoint: name,
-        status: xhr.status || 0,
-        message: message,
-        body: parseResponse(xhr)
-      })
-    }
+    onError({
+      status: xhr.status || 0,
+      message: message,
+      body: parseBody(xhr.responseText)
+    })
   }
 
   xhr.open(String(settings.method || "GET"), url, true)
@@ -94,7 +93,7 @@ function request(baseUrl, apiKey, name, options, onSuccess, onError) {
     if ((xhr.status >= 200 && xhr.status < 300)
         || accepted.indexOf(xhr.status) >= 0) {
       completed = true
-      if (onSuccess) onSuccess(parseResponse(xhr), xhr)
+      onSuccess(parseBody(xhr.responseText), xhr)
     } else {
       fail("HTTP " + (xhr.status || 0))
     }
