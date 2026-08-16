@@ -9,10 +9,7 @@ stops the user service, and launches Syncthing's local Web UI.
 ## Install
 
 ```bash
-omarchy plugin add \
-  https://github.com/ilyaZar/omarchy-syncthing.git \
-  --enable \
-  --yes
+omarchy plugin add https://github.com/ilyaZar/omarchy-syncthing.git --enable
 ```
 
 ## Install Syncthing
@@ -29,11 +26,10 @@ advanced folder options. Syncthing ships with the Web UI built in, so no
 separate installation is required. Basic folder management is also available
 directly from the plugin.
 
-> [!IMPORTANT]
-> Syncthing is powerful, but its initial setup can be cumbersome. The plugin
-> makes folder management easier, while the full setup remains in the Web UI.
-> Carefully read [Details on setup](#details-on-setup), and use **Open Web UI**
-> for easy access to the Syncthing web interface.
+> [!IMPORTANT] Syncthing is powerful, but its initial setup can be cumbersome.
+> The plugin makes folder management easier, while the full setup remains in the
+> Web UI. Carefully read [Details on setup](#details-on-setup), and use **Open
+> Web UI** for easy access to the Syncthing web interface.
 
 ## Use
 
@@ -61,10 +57,9 @@ directly from the plugin.
 
 ## Demo
 
-> [!WARNING]
-> The Hyprland window to the left of the plugin is **not** part of the plugin. It
-> live-tracks changes in the `test-source` directory to make the demo easier to
-> follow.
+> [!WARNING] The Hyprland window to the left of the plugin is **not** part of
+> the plugin. It live-tracks changes in the `test-source` directory to make the
+> demo easier to follow.
 
 See a folder added, follow uploads, downloads, updates, and removals, open
 Syncthing's local Web UI, then unlink and forget the folder without deleting its
@@ -252,7 +247,7 @@ files.
 Remove the plugin separately:
 
 ```bash
-omarchy plugin remove io.github.ilyazar.syncthing --yes
+omarchy plugin remove io.github.ilyazar.syncthing
 ```
 
 Removing the plugin never removes Syncthing. The plugin monitors any Syncthing
