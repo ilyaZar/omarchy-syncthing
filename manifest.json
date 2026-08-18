@@ -19,7 +19,8 @@
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "refreshIntervalSec": 60
+      "refreshIntervalSec": 60,
+      "iconStyle": "Brand"
     },
     "schema": [
       {
@@ -30,6 +31,14 @@
         "max": 3600,
         "step": 60,
         "defaultValue": 60
+      },
+      {
+        "key": "iconStyle",
+        "type": "enum",
+        "label": "Icon color",
+        "options": ["Brand", "Auto"],
+        "defaultValue": "Brand",
+        "description": "Brand keeps Syncthing's own artwork. Auto tints the icon to the bar text color. Also under More in the panel."
       }
     ]
   }
