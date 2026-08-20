@@ -4,7 +4,7 @@ Notable changes to Syncthing for Omarchy are documented here.
 
 ## Unreleased
 
-## 0.2.0 - 2026-08-20
+## 0.1.5 - 2026-08-20
 
 - Add an optional theme-colored bar icon while keeping the Syncthing artwork
   as the default (@davidszp, @ilyaZar).
