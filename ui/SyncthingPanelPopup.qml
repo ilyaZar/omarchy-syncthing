@@ -37,7 +37,8 @@ KeyboardPanel {
 
   focusTarget: keyCatcher
   contentWidth: fittedContentWidth(Style.space(380))
-  contentHeight: fittedContentHeight(content.implicitHeight, Style.space(560))
+  contentHeight: fittedContentHeight(content.implicitHeight
+    + shortcutHint.implicitHeight + Style.space(12), Style.space(560))
 
   PanelKeyCatcher {
     id: keyCatcher
@@ -84,7 +85,11 @@ KeyboardPanel {
 
   Flickable {
     id: panelFlick
-    anchors.fill: parent
+    anchors.top: parent.top
+    anchors.right: parent.right
+    anchors.bottom: shortcutHint.top
+    anchors.bottomMargin: Style.space(12)
+    anchors.left: parent.left
     contentWidth: width
     contentHeight: content.implicitHeight
     clip: true
@@ -201,16 +206,20 @@ KeyboardPanel {
         success: root.controller.success
         fontFamily: root.controller.fontFamily
       }
-
-      Text {
-        text: "REFRESH (r)  WEB UI (w)  START/STOP (p)  MORE (m)"
-        color: root.controller.dim
-        font.family: root.controller.fontFamily
-        font.pixelSize: Style.font.caption
-        font.bold: true
-        font.letterSpacing: 0.8
-      }
     }
+  }
+
+  Text {
+    id: shortcutHint
+    anchors.left: parent.left
+    anchors.bottom: parent.bottom
+    text: "REFRESH (r)  WEB UI (w)  START/STOP (p)  "
+      + (root.controller.moreOpen ? "LESS (m)" : "MORE (m)")
+    color: root.controller.dim
+    font.family: root.controller.fontFamily
+    font.pixelSize: Style.font.caption
+    font.bold: true
+    font.letterSpacing: 0.8
   }
 
   CompactConfirmDialog {
