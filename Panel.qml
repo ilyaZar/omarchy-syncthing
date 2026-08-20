@@ -38,6 +38,9 @@ Panel {
   property string displayedNotice: ""
   property bool noticeShown: false
   readonly property var folderRows: buildFolderRows()
+  readonly property bool compactFolders: folderRows.length >= 5
+  readonly property var visibleFolderRows: compactFolders
+    ? (selectedFolder() ? [selectedFolder()] : []) : folderRows
   readonly property var pendingOfferRows: pendingOfferOptions()
   readonly property double trackedBytes: folderTotal("globalBytes")
   readonly property int trackedFiles: folderTotal("globalFiles")
@@ -86,12 +89,6 @@ Panel {
     ? syncthing.recoveryWarning : ""
   readonly property string visibleSyncActivity: syncthing
     ? syncthing.syncActivity : ""
-  readonly property string visibleSyncDots: syncthing
-    ? syncthing.syncActivityDots : ""
-  readonly property string visibleSyncAction: syncthing
-    ? syncthing.syncActivityAction : ""
-  readonly property string visibleSyncDetail: syncthing
-    ? syncthing.syncActivityDetail : ""
   readonly property string heroMeta: {
     if (!syncthing) return "Service unavailable"
     if (syncthing.installationState === "missing") {
@@ -123,12 +120,6 @@ Panel {
   function configureService() {
     if (!syncthing) return
     syncthing.setRefreshInterval(setting("refreshIntervalSec", 60))
-  }
-
-  function syncActivityColor(action) {
-    if (action === "removing") return urgent
-    if (action === "upload") return success
-    return syncthingBlue
   }
 
   function buildFolderRows() {
@@ -239,15 +230,45 @@ Panel {
       + formatBytes(folder.globalBytes) + labelSuffix
   }
 
-  function folderLinkState(folder) {
-    return folder && folder.paused ? "UNLINKED" : "LINKED"
+  function folderState(folder) {
+    if (!folder) return "UNKNOWN"
+    if (folder.paused) return "UNLINKED"
+    if (folder.problem) return "ERROR"
+    if (syncthing && syncthing.recentlyLinkedFolderId === folder.id) {
+      return "LINKED"
+    }
+    if (folder.syncing || folder.scanning) return "SYNCING"
+    return "SYNCED"
+  }
+
+  function folderStateColor(folder) {
+    var state = folderState(folder)
+    if (state === "UNLINKED") return warning
+    if (state === "SYNCING") return syncthingBlue
+    if (state === "ERROR") return urgent
+    return success
+  }
+
+  function folderHasActivity(folder) {
+    return folder && syncthing && visibleSyncActivity !== ""
+      && syncthing.syncActivityFolderId === folder.id
   }
 
   function selectedFolder() {
+    return folderById(selectedFolderId)
+  }
+
+  function folderById(folderId) {
     for (var i = 0; i < folderRows.length; i++) {
-      if (folderRows[i].id === selectedFolderId) return folderRows[i]
+      if (folderRows[i].id === folderId) return folderRows[i]
     }
     return null
+  }
+
+  function selectActiveFolder() {
+    if (!compactFolders || visibleSyncActivity === "" || !syncthing) return
+    var activeFolder = folderById(syncthing.syncActivityFolderId)
+    if (activeFolder) selectedFolderId = activeFolder.id
   }
 
   function ensureFolderSelection() {
@@ -438,6 +459,7 @@ Panel {
     forgetFolderId = ""
     forgetConfirmOpen = false
     folderPickerError = ""
+    if (folderOverviewSelector.popupOpen) folderOverviewSelector.close()
     if (folderSelector.popupOpen) folderSelector.close()
     if (pendingOfferSelector.popupOpen) pendingOfferSelector.close()
     if (devicePicker.popupOpen) devicePicker.close()
@@ -566,7 +588,10 @@ Panel {
 
   onSyncthingChanged: configureService()
   onSettingsChanged: configureService()
-  onFolderRowsChanged: ensureFolderSelection()
+  onFolderRowsChanged: {
+    ensureFolderSelection()
+    selectActiveFolder()
+  }
   onPendingOfferRowsChanged: ensurePendingOfferSelection()
   onVisibleNoticeChanged: {
     if (visibleNotice !== "") {
@@ -584,6 +609,7 @@ Panel {
     if (opened) {
       if (syncthing) syncthing.refresh()
       ensureFolderSelection()
+      selectActiveFolder()
       if (panelFlick) panelFlick.contentY = 0
       Qt.callLater(function() { keyCatcher.forceActiveFocus() })
     } else if (!preserveStateForFolderPicker) {
@@ -640,6 +666,10 @@ Panel {
       if (root.syncthing.folderMutationError !== "") {
         root.addSubmissionPending = false
       }
+    }
+
+    function onSyncActivityFolderIdChanged() {
+      root.selectActiveFolder()
     }
   }
 
@@ -727,7 +757,8 @@ Panel {
       PanelKeyCatcher {
         id: keyCatcher
         anchors.fill: parent
-        blocked: root.addOpen || folderSelector.popupOpen
+        blocked: root.addOpen || folderOverviewSelector.popupOpen
+          || folderSelector.popupOpen
           || pendingOfferSelector.popupOpen
         onCloseRequested: {
           if (root.forgetConfirmOpen) {
@@ -839,52 +870,6 @@ Panel {
             font.family: root.fontFamily
             font.pixelSize: Style.font.bodySmall
             wrapMode: Text.WordWrap
-          }
-
-          Row {
-            visible: root.visibleWarning === "" && root.visibleSyncActivity !== ""
-            width: parent.width
-            spacing: 0
-
-            Text {
-              id: syncActivityLabel
-              text: "File syncing"
-              color: root.syncthingBlue
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
-            }
-
-            Item {
-              id: syncDotsSlot
-              width: syncDotsProbe.implicitWidth
-              height: syncDotsProbe.implicitHeight
-
-              Text {
-                text: root.visibleSyncDots
-                color: root.syncthingBlue
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.bodySmall
-              }
-
-              Text {
-                id: syncDotsProbe
-                visible: false
-                text: "..."
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.bodySmall
-              }
-            }
-
-            Text {
-              width: Math.max(0, parent.width - syncActivityLabel.implicitWidth
-                - syncDotsSlot.width)
-              text: " " + root.visibleSyncDetail
-              color: root.syncActivityColor(root.visibleSyncAction)
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
-              elide: Text.ElideRight
-              wrapMode: Text.NoWrap
-            }
           }
 
           Text {
@@ -1245,12 +1230,26 @@ Panel {
               horizontalAlignment: Text.AlignHCenter
             }
 
+            ToggleDropdown {
+              id: folderOverviewSelector
+              visible: root.compactFolders
+              width: parent.width
+              height: Style.space(28)
+              showLabel: false
+              rowHeight: Style.space(28)
+              value: root.selectedFolderId
+              options: root.folderOptions()
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+              onChanged: function(value) { root.selectedFolderId = value }
+            }
+
             Column {
               width: parent.width
               spacing: Style.space(6)
 
               Repeater {
-                model: root.folderRows
+                model: root.visibleFolderRows
 
                 FolderRow {
                   required property var modelData
@@ -1318,7 +1317,7 @@ Panel {
 
               ToggleDropdown {
                 id: folderSelector
-                visible: root.folderRows.length > 0
+                visible: root.folderRows.length > 0 && !root.compactFolders
                 Layout.fillWidth: true
                 Layout.preferredHeight: Style.space(28)
                 showLabel: false
@@ -1568,16 +1567,16 @@ Panel {
     readonly property bool canOpen: folder && String(folder.path || "") !== ""
     readonly property bool selected: folder
       && String(folder.id || "") === root.selectedFolderId
-    readonly property color stateColor: problem
+    readonly property color borderColor: problem
       ? root.urgent : (syncing ? root.foreground : root.dim)
-    readonly property color linkColor: folder && folder.paused
-      ? root.warning : root.success
+    readonly property color stateColor: root.folderStateColor(folder)
 
-    implicitHeight: row.implicitHeight + Style.space(14)
+    implicitHeight: nameBadge.implicitHeight + details.implicitHeight
+      + Style.space(14)
     color: rowMouse.containsMouse
-      ? Style.hoverFillFor(stateColor, Color.accent) : "transparent"
+      ? Style.hoverFillFor(borderColor, Color.accent) : "transparent"
     borderSpec: Border.controlSpec(
-      selected ? "focus" : "normal", stateColor, Color.accent)
+      selected ? "focus" : "normal", borderColor, Color.accent)
     radius: Style.cornerRadius
 
     MouseArea {
@@ -1590,96 +1589,121 @@ Panel {
       onClicked: root.openFolder(folderRow.folder)
     }
 
-    RowLayout {
-      id: row
+    BorderSurface {
+      id: nameBadge
       z: 1
-      anchors.fill: parent
-      anchors.margins: Style.space(8)
-      spacing: Style.space(8)
+      anchors.left: parent.left
+      anchors.top: parent.top
+      width: Math.min(nameText.implicitWidth + Style.space(16),
+        parent.width - stateBadge.width - Style.space(8))
+      implicitHeight: nameText.implicitHeight + Style.space(6)
+      height: implicitHeight
+      color: "transparent"
+      borderSpec: Border.withWidth(Border.controlSpec(
+        "normal", folderRow.borderColor, Color.accent), "0 1 1 0")
+      radius: 0
 
       Text {
-        text: folderRow.problem ? "\uf071"
-          : (folderRow.folder.paused ? "\uf04c"
-            : (folderRow.syncing ? "\uf021" : "\uf00c"))
+        id: nameText
+        anchors.fill: parent
+        anchors.leftMargin: Style.space(8)
+        anchors.rightMargin: Style.space(8)
+        text: String(folderRow.folder.label || "Unnamed folder")
+        color: root.foreground
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.body
+        font.bold: true
+        verticalAlignment: Text.AlignVCenter
+        elide: Text.ElideRight
+      }
+    }
+
+    BorderSurface {
+      id: stateBadge
+      z: 1
+      anchors.right: parent.right
+      anchors.top: parent.top
+      implicitWidth: stateText.implicitWidth + Style.space(10)
+      width: implicitWidth
+      height: nameBadge.height
+      color: "transparent"
+      borderSpec: Border.withWidth(Border.controlSpec(
+        "normal", folderRow.stateColor, Color.accent), "0 0 1 1")
+      radius: 0
+
+      Text {
+        id: stateText
+        anchors.centerIn: parent
+        text: root.folderState(folderRow.folder)
         color: folderRow.stateColor
         font.family: root.fontFamily
-        font.pixelSize: Style.font.icon
-        Layout.alignment: Qt.AlignVCenter
+        font.pixelSize: Style.font.caption
+        font.bold: true
+      }
+    }
+
+    Column {
+      id: details
+      z: 1
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.top: nameBadge.bottom
+      anchors.leftMargin: Style.space(8)
+      anchors.rightMargin: folderRow.folder.paused
+        ? forgetButton.width + Style.space(14) : Style.space(8)
+      anchors.topMargin: Style.space(6)
+      spacing: Style.space(1)
+
+      Text {
+        width: parent.width
+        text: root.folderHasActivity(folderRow.folder)
+          ? root.visibleSyncActivity : " "
+        color: root.syncthingBlue
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+        elide: Text.ElideRight
       }
 
-      ColumnLayout {
-        Layout.fillWidth: true
-        spacing: Style.space(1)
-
-        Text {
-          Layout.fillWidth: true
-          text: String(folderRow.folder.label || "Unnamed folder")
-          color: root.foreground
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.body
-          font.bold: true
-          elide: Text.ElideRight
-        }
-
-        Text {
-          Layout.fillWidth: true
-          text: root.folderMeta(folderRow.folder)
-          color: folderRow.problem ? root.urgent : root.dim
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
-          elide: Text.ElideRight
-        }
-
-        Text {
-          visible: folderRow.canOpen
-          Layout.fillWidth: true
-          text: String(folderRow.folder.path || "")
-          color: root.dim
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
-          elide: Text.ElideLeft
-        }
+      Text {
+        width: parent.width
+        text: root.folderMeta(folderRow.folder)
+        color: folderRow.problem ? root.urgent : root.dim
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+        elide: Text.ElideRight
       }
 
-      ColumnLayout {
-        spacing: Style.space(4)
-        Layout.alignment: Qt.AlignTop | Qt.AlignRight
-
-        BorderSurface {
-          implicitWidth: statusLabel.implicitWidth + Style.space(10)
-          implicitHeight: statusLabel.implicitHeight + Style.space(4)
-          color: "transparent"
-          borderSpec: Border.controlSpec(
-            "normal", folderRow.linkColor, Color.accent)
-          radius: Style.cornerRadius
-          Layout.alignment: Qt.AlignRight
-
-          Text {
-            id: statusLabel
-            anchors.centerIn: parent
-            text: root.folderLinkState(folderRow.folder)
-            color: folderRow.linkColor
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
-            font.bold: true
-          }
-        }
-
-        Button {
-          visible: folderRow.folder && folderRow.folder.paused
-          text: "FORGET"
-          tooltipText: "Remove only this unlinked Syncthing configuration"
-          bordered: true
-          foreground: root.urgent
-          fontFamily: root.fontFamily
-          fontSize: Style.font.caption
-          horizontalPadding: Style.space(5)
-          verticalPadding: Style.space(2)
-          enabled: root.syncthing && !root.syncthing.folderMutationBusy
-          Layout.alignment: Qt.AlignRight
-          onClicked: root.requestForget(folderRow.folder)
-        }
+      Text {
+        visible: folderRow.canOpen
+        width: parent.width
+        text: String(folderRow.folder.path || "")
+        color: root.dim
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+        elide: Text.ElideLeft
       }
+
+    }
+
+    Button {
+      id: forgetButton
+      z: 1
+      visible: folderRow.folder && folderRow.folder.paused
+      anchors.right: parent.right
+      anchors.bottom: parent.bottom
+      anchors.margins: Style.space(6)
+      width: implicitWidth
+      height: implicitHeight
+      text: "FORGET"
+      tooltipText: "Remove only this unlinked Syncthing configuration"
+      bordered: true
+      foreground: root.urgent
+      fontFamily: root.fontFamily
+      fontSize: Style.font.caption
+      horizontalPadding: Style.space(5)
+      verticalPadding: Style.space(2)
+      enabled: root.syncthing && !root.syncthing.folderMutationBusy
+      onClicked: root.requestForget(folderRow.folder)
     }
   }
 
