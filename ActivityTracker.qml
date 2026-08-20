@@ -121,6 +121,7 @@ QtObject {
       noteIndexedChange(folder, changes[i].path,
         changes[i].deleted ? "removing" : "syncing")
     }
+    rebuild()
   }
 
   function inspectIndexedFile(folder, filePath, onFinished) {

@@ -20,7 +20,6 @@ QtObject {
     tracker.processIndexedChanges("folder", [{
       path: "nested/file.txt", deleted: false
     }])
-    tracker.rebuild()
     compare(tracker.dots, ".  ", "first aligned dot frame")
     tracker._dotIndex = 1
     compare(tracker.dots, ".. ", "second aligned dot frame")
@@ -32,7 +31,6 @@ QtObject {
     tracker.processIndexedChanges("folder", [{
       path: "nested/file.txt", deleted: true
     }])
-    tracker.rebuild()
     compare(tracker.action, "removing", "removal action")
     compare(tracker.detail, "Removing file.txt", "removal detail")
 
