@@ -25,14 +25,6 @@ QtObject {
     compare(tracker.dots, ".. ", "second aligned dot frame")
     tracker._dotIndex = 2
     compare(tracker.dots, "...", "third aligned dot frame")
-    compare(tracker.action, "syncing", "addition action")
-    compare(tracker.detail, "file.txt", "addition detail")
-
-    tracker.processIndexedChanges("folder", [{
-      path: "nested/file.txt", deleted: true
-    }])
-    compare(tracker.action, "removing", "removal action")
-    compare(tracker.detail, "Removing file.txt", "removal detail")
 
     tracker.processIndexedChanges("second-folder", [{
       path: "second.txt", deleted: false
@@ -54,18 +46,17 @@ QtObject {
     compare(tracker.detail, "Upload video.mp4", "upload detail")
   }
 
-  function testNestedDirectoryScan() {
+  function testNestedIndexedState() {
     var scans = []
+    var fileInfo = {
+      name: "new-directory",
+      type: "FILE_INFO_TYPE_DIRECTORY",
+      deleted: false
+    }
     tracker.stop()
     tracker.requestApi = function(name, options, onSuccess, onError) {
       if (name === "getFileInfo") {
-        onSuccess({
-          local: {
-            name: options.query.file,
-            type: "FILE_INFO_TYPE_DIRECTORY",
-            deleted: false
-          }
-        })
+        onSuccess({ local: fileInfo })
       } else if (name === "scanFolder") {
         scans.push(options.query)
         onSuccess({})
@@ -79,32 +70,48 @@ QtObject {
     })
     compare(scans, [{ folder: "folder", sub: "new-directory" }],
       "new directory scan")
+
+    fileInfo = {
+      name: "new-directory/file.txt",
+      type: "FILE_INFO_TYPE_FILE",
+      deleted: false
+    }
+    tracker.processLocalIndexUpdate({
+      data: { folder: "folder", filenames: [fileInfo.name] }
+    })
+    compare(tracker.action, "syncing", "nested addition action")
+    compare(tracker.detail, "file.txt", "nested addition detail")
+
+    fileInfo.deleted = true
+    tracker.processLocalIndexUpdate({
+      data: { folder: "folder", filenames: [fileInfo.name] }
+    })
+    compare(tracker.action, "removing", "nested removal action")
+    compare(tracker.detail, "Removing file.txt", "nested removal detail")
   }
 
   function testModels() {
     var rows = PanelModel.buildFolderRows({
       localDeviceId: "local",
       folders: [{
-        id: "folder",
-        label: "Configured label",
-        path: "/tmp/truthful-folder",
+        id: "folder", label: "Configured label", path: "/tmp/truthful-folder",
         devices: [{ deviceID: "local" }]
       }],
       folderStatuses: {
         folder: { state: "idle", globalFiles: 3, globalBytes: 12 }
       }
     }, "/home/test")
-    compare(rows.length, 1, "folder row count")
-    compare(rows[0].label, "truthful-folder", "folder display label")
-    compare(PanelModel.folderState(rows[0], ""), "SYNCED", "folder state")
-    compare(PanelModel.folderState(rows[0], "", true), "SYNCING",
+    var folder = rows[0]
+    compare(folder.label, "truthful-folder", "folder display label")
+    compare(PanelModel.folderMeta(folder),
+      "3 files · local only · Configured label", "folder metadata")
+    compare(PanelModel.folderState(folder, ""), "SYNCED", "folder state")
+    compare(PanelModel.folderState(folder, "", true), "SYNCING",
       "active folder state")
     compare(PanelModel.folderState({ paused: true }, "", true), "UNLINKED",
       "paused folder state")
     compare(PanelModel.folderState({ problem: true }, "", true), "ERROR",
       "problem folder state")
-    compare(PanelModel.folderMeta(rows[0]),
-      "3 files · local only · Configured label", "folder metadata")
 
     var config = FolderModel.buildConfig({}, {
       id: "folder",
@@ -119,9 +126,9 @@ QtObject {
   Component.onCompleted: {
     try {
       testActivityStates()
-      testNestedDirectoryScan()
+      testNestedIndexedState()
       testModels()
-      console.log("all model tests passed")
+      console.log("all tests passed")
       Qt.exit(0)
     } catch (error) {
       console.error(error)
