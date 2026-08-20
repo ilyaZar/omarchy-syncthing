@@ -97,6 +97,12 @@ QtObject {
     compare(rows.length, 1, "folder row count")
     compare(rows[0].label, "truthful-folder", "folder display label")
     compare(PanelModel.folderState(rows[0], ""), "SYNCED", "folder state")
+    compare(PanelModel.folderState(rows[0], "", true), "SYNCING",
+      "active folder state")
+    compare(PanelModel.folderState({ paused: true }, "", true), "UNLINKED",
+      "paused folder state")
+    compare(PanelModel.folderState({ problem: true }, "", true), "ERROR",
+      "problem folder state")
     compare(PanelModel.folderMeta(rows[0]),
       "3 files · local only · Configured label", "folder metadata")
 

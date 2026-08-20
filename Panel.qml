@@ -156,13 +156,14 @@ Panel {
 
   function folderState(folder) {
     return PanelModel.folderState(folder,
-      syncthing ? syncthing.recentlyLinkedFolderId : "")
+      syncthing ? syncthing.recentlyLinkedFolderId : "",
+      folderHasActivity(folder))
   }
 
   function folderStateColor(folder) {
     var state = folderState(folder)
     if (state === "UNLINKED") return warning
-    if (state === "SYNCING") return syncthingBlue
+    if (state === "SYNCING") return warning
     if (state === "ERROR") return urgent
     return success
   }
