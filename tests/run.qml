@@ -34,6 +34,13 @@ QtObject {
     compare(tracker.action, "removing", "removal action")
     compare(tracker.detail, "Removing file.txt", "removal detail")
 
+    tracker.processIndexedChanges("second-folder", [{
+      path: "second.txt", deleted: false
+    }])
+    tracker.advanceFile()
+    compare(tracker.folderId, "second-folder", "file cycle folder")
+    compare(tracker.detail, "second.txt", "file cycle detail")
+
     tracker.stop()
     tracker.processEvent({
       type: "RemoteDownloadProgress",

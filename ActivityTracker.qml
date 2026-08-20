@@ -69,6 +69,14 @@ QtObject {
     return 0
   }
 
+  function advanceFile() {
+    if (syncingFiles.length > 1) {
+      _fileIndex = (_fileIndex + 1) % syncingFiles.length
+    } else {
+      _fileIndex = 0
+    }
+  }
+
   function rebuild() {
     var wasActive = syncingFiles.length > 0
     var result = []
@@ -303,13 +311,12 @@ QtObject {
   property Timer fileTimer: Timer {
     interval: 2500
     repeat: true
-    running: root.syncingFiles.length > 1
-    onTriggered: root._fileIndex = (root._fileIndex + 1)
-      % root.syncingFiles.length
+    running: root.enabled
+    onTriggered: root.advanceFile()
   }
 
   property Timer changeHoldTimer: Timer {
-    interval: 7000
+    interval: Math.max(7000, (root._indexedFiles.length + 1) * 2500)
     repeat: false
     onTriggered: {
       root._indexedFiles = []
