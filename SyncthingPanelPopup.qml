@@ -203,7 +203,7 @@ KeyboardPanel {
       }
 
       Text {
-        text: "REFRESH (R)  WEB UI (W)  START/STOP (P)  MORE (M)"
+        text: "REFRESH (r)  WEB UI (w)  START/STOP (p)  MORE (m)"
         color: root.controller.dim
         font.family: root.controller.fontFamily
         font.pixelSize: Style.font.caption

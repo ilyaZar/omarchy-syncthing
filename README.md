@@ -27,12 +27,12 @@ starts `syncthing.service`.
 
 | Key   | Action                    |
 | ----- | ------------------------- |
-| `R`   | refresh status            |
-| `W`   | open the Web UI           |
-| `P`   | start or stop the service |
-| `M`   | show or hide More         |
-| `Q`   | close the panel           |
-| `Esc` | close the panel           |
+| `r`   | refresh status            |
+| `w`   | open the Web UI           |
+| `p`   | start or stop the service |
+| `m`   | show or hide More         |
+| `q`   | close the panel           |
+| `esc` | close the panel           |
 
 ## Demo
 
