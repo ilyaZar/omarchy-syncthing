@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+  <defs>
+    <mask id="bite" maskUnits="userSpaceOnUse" x="0" y="0" width="16" height="16">
+      <rect x="0" y="0" width="16" height="16" style="fill:#fff"/>
+      <circle cx="11.5" cy="11.5" r="5.5" style="fill:#000"/>
+    </mask>
+  </defs>
+  <g id="syncthing-mark" mask="url(#bite)">
+    <circle id="ring" cx="8.218058" cy="8.000000" r="5.9557071"
+      style="fill:none;stroke:#fff;stroke-width:1.4"/>
+    <line id="arm-l" x1="9.417377" y1="8.804085" x2="2.480409"
+      y2="9.444634" style="stroke:#fff;stroke-width:1.4"/>
+    <line id="arm-tr" x1="9.417377" y1="8.804085" x2="13.519591"
+      y2="5.396935" style="stroke:#fff;stroke-width:1.4"/>
+    <line id="arm-br" x1="9.417377" y1="8.804085" x2="12.006814"
+      y2="12.538330" style="stroke:#fff;stroke-width:1.4"/>
+    <circle id="node-c" cx="9.417377" cy="8.804085" r="1.7" style="fill:#fff"/>
+    <circle id="node-l" cx="2.480409" cy="9.444634" r="1.7" style="fill:#fff"/>
+    <circle id="node-tr" cx="13.519591" cy="5.396935" r="1.7" style="fill:#fff"/>
+    <circle id="node-br" cx="12.006814" cy="12.538330" r="1.7" style="fill:#fff"/>
+  </g>
+  <g id="badge" transform="translate(11.5,11.5) scale(1.35) translate(-11.5,-11.5)">
+    <rect x="11" y="9" width="1" height="3" style="fill:#fff"/>
+    <rect x="11" y="13" width="1" height="1" style="fill:#fff"/>
+  </g>
+</svg>

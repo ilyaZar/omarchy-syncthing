@@ -13,6 +13,11 @@ They were retrieved from the Syncthing repository at commit
 
 <https://github.com/syncthing/syncthing/tree/main/assets/statusicons>
 
+`mono/` holds monochrome redraws of the same four icons, tinted to the theme
+at runtime by `MonoIcon.qml`. They must stay pure white on transparent: the
+tint multiplies the source's value channel, so anything darker comes out
+darker still.
+
 Copyright belongs to the Syncthing contributors. These adapted files remain
 licensed under the Mozilla Public License 2.0:
 

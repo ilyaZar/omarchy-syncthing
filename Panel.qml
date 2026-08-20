@@ -59,8 +59,11 @@ Panel {
     if (busy) return "sync"
     return "default"
   }
+  readonly property bool themedIcon: setting("themedIcon", false) === true
   readonly property url syncthingIconSource: Qt.resolvedUrl(
     "assets/status-" + iconVariant + ".svg")
+  readonly property url themedIconSource: Qt.resolvedUrl(
+    "assets/mono/status-" + iconVariant + ".svg")
   readonly property string tooltip: {
     if (!syncthing) return "Syncthing unavailable"
     if (iconVariant === "sync" && syncInProgress) {
@@ -679,6 +682,17 @@ Panel {
     bar: root.bar
     iconComponent: Component {
       Item {
+        opacity: root.syncthing && root.syncthing.online ? 1.0 : 0.55
+
+        // Keep the effect warm under the brand icon for reliable live switches.
+        MonoIcon {
+          anchors.centerIn: parent
+          width: Style.space(12)
+          height: width
+          source: root.themedIconSource
+          tint: root.foreground
+        }
+
         Image {
           anchors.centerIn: parent
           width: Style.space(12)
@@ -688,7 +702,7 @@ Panel {
           sourceSize.height: 32
           fillMode: Image.PreserveAspectFit
           smooth: true
-          opacity: root.syncthing && root.syncthing.online ? 1.0 : 0.55
+          visible: !root.themedIcon
         }
       }
     }
