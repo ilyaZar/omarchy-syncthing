@@ -4,6 +4,8 @@ See Syncthing health and file activity from the Omarchy bar. The plugin can
 manage local folders, open Syncthing's Web UI, control the user service, and
 install the official Arch package.
 
+![Syncthing status and installation controls](preview.png)
+
 ## Install
 
 ```bash
@@ -31,6 +33,17 @@ starts `syncthing.service`.
 | `M`   | show or hide More         |
 | `Q`   | close the panel           |
 | `Esc` | close the panel           |
+
+## Demo
+
+> [!WARNING]
+> The Hyprland window to the left of the plugin is not part of the plugin. It
+> live-tracks changes in the `test-source` directory for the demonstration.
+
+The demo shows folder creation, file activity, the local Web UI, and removing a
+folder configuration without deleting its files.
+
+<https://github.com/user-attachments/assets/445066ac-68db-4abb-9e2e-68943c348f9b>
 
 ### File activity
 
