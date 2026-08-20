@@ -59,14 +59,11 @@ Panel {
     if (busy) return "sync"
     return "default"
   }
-  // Bar icon: Brand keeps Syncthing's artwork, Auto tints a monochrome master
-  // with the bar foreground. Brand is the default, so nothing changes unless
-  // asked. See "Icon color" in the widget settings, or BAR ICON under More.
-  readonly property string iconStyle: setting("iconStyle", "Brand")
-  readonly property bool brandIcon: iconStyle === "Brand"
+  readonly property bool themedIcon: setting("themedIcon", false) === true
   readonly property url syncthingIconSource: Qt.resolvedUrl(
-    "assets/" + (brandIcon ? "brand" : "mono")
-      + "/status-" + iconVariant + ".svg")
+    "assets/status-" + iconVariant + ".svg")
+  readonly property url themedIconSource: Qt.resolvedUrl(
+    "assets/mono/status-" + iconVariant + ".svg")
   readonly property string tooltip: {
     if (!syncthing) return "Syncthing unavailable"
     if (iconVariant === "sync" && syncInProgress) {
@@ -121,38 +118,6 @@ Panel {
     if (pausedFolderCount > 0) return pausedFolderCount + " folder"
       + (pausedFolderCount === 1 ? " is" : "s are") + " paused"
     return "Everything synchronized"
-  }
-
-  // A widget setting is a plain key on this module's shell.json entry, so
-  // writing one means finding that entry in the bar layout. Guarded so a shell
-  // without the mutator leaves the control disabled instead of throwing.
-  readonly property bool canPersistSettings: bar && bar.shell
-    && typeof bar.shell.mutateShellConfig === "function"
-
-  readonly property var iconStyleOptions: [
-    { value: "Brand", label: "Syncthing blue" },
-    { value: "Auto", label: "Theme color" }
-  ]
-
-  function persistSetting(key, value) {
-    if (!canPersistSettings || moduleName === "") return false
-    var written = false
-    bar.shell.mutateShellConfig(function(config) {
-      var layout = (config && config.bar && config.bar.layout) || {}
-      for (var region in layout) {
-        var entries = layout[region] || []
-        for (var i = 0; i < entries.length; i++) {
-          var entry = entries[i]
-          // A bare string entry has nowhere to keep a setting; promote it.
-          if (typeof entry === "string" && entry === root.moduleName)
-            entry = entries[i] = { id: entry }
-          else if (!entry || String(entry.id) !== root.moduleName) continue
-          entry[key] = value
-          written = true
-        }
-      }
-    })
-    return written
   }
 
   function configureService() {
@@ -476,7 +441,6 @@ Panel {
     if (folderSelector.popupOpen) folderSelector.close()
     if (pendingOfferSelector.popupOpen) pendingOfferSelector.close()
     if (devicePicker.popupOpen) devicePicker.close()
-    if (iconStyleSelector.popupOpen) iconStyleSelector.close()
   }
 
   function applyPendingFolder(value) {
@@ -718,14 +682,27 @@ Panel {
     bar: root.bar
     iconComponent: Component {
       Item {
+        opacity: root.syncthing && root.syncthing.online ? 1.0 : 0.55
+
+        // Keep the effect warm under the brand icon for reliable live switches.
         MonoIcon {
           anchors.centerIn: parent
           width: Style.space(12)
           height: width
-          source: root.syncthingIconSource
+          source: root.themedIconSource
           tint: root.foreground
-          colorize: !root.brandIcon
-          opacity: root.syncthing && root.syncthing.online ? 1.0 : 0.55
+        }
+
+        Image {
+          anchors.centerIn: parent
+          width: Style.space(12)
+          height: width
+          source: root.syncthingIconSource
+          sourceSize.width: 32
+          sourceSize.height: 32
+          fillMode: Image.PreserveAspectFit
+          smooth: true
+          visible: !root.themedIcon
         }
       }
     }
@@ -745,14 +722,13 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     contentWidth: popup.fittedContentWidth(Style.space(380))
-    // 620, not 560: the BAR ICON row pushed the shortcut hints past the old cap.
-    contentHeight: popup.fittedContentHeight(content.implicitHeight, Style.space(620))
+    contentHeight: popup.fittedContentHeight(content.implicitHeight, Style.space(560))
 
       PanelKeyCatcher {
         id: keyCatcher
         anchors.fill: parent
         blocked: root.addOpen || folderSelector.popupOpen
-          || pendingOfferSelector.popupOpen || iconStyleSelector.popupOpen
+          || pendingOfferSelector.popupOpen
         onCloseRequested: {
           if (root.forgetConfirmOpen) {
             root.forgetConfirmOpen = false
@@ -826,12 +802,14 @@ Panel {
               iconOpacity: root.syncthing && root.syncthing.serviceActive
                 && root.syncthing.online ? 1.0 : 0.5
               iconComponent: Component {
-                MonoIcon {
+                Image {
                   width: hero.iconSize
                   height: width
                   source: root.syncthingIconSource
-                  tint: root.foreground
-                  colorize: !root.brandIcon
+                  sourceSize.width: 64
+                  sourceSize.height: 64
+                  fillMode: Image.PreserveAspectFit
+                  smooth: true
                 }
               }
               trailingControl: Component {
@@ -1535,38 +1513,6 @@ Panel {
               fontFamily: root.fontFamily
               enabled: root.syncthing && root.syncthing.canInstall
               onClicked: root.installationAction()
-            }
-
-            PanelSeparator {
-              foreground: root.foreground
-            }
-
-            RowLayout {
-              width: parent.width
-              spacing: Style.space(6)
-
-              PanelSectionHeader {
-                Layout.fillWidth: true
-                text: "BAR ICON"
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-              }
-
-              ToggleDropdown {
-                id: iconStyleSelector
-                Layout.preferredWidth: Style.space(132)
-                Layout.preferredHeight: Style.space(28)
-                showLabel: false
-                rowHeight: Style.space(28)
-                value: root.iconStyle
-                options: root.iconStyleOptions
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-                enabled: root.canPersistSettings
-                onChanged: function(value) {
-                  root.persistSetting("iconStyle", value)
-                }
-              }
             }
           }
 

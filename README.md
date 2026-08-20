@@ -44,8 +44,7 @@ directly from the plugin.
 - Select **+** to add an existing local directory.
 - Select **Refresh** for an immediate health update.
 - Select **Open Web UI** to open the local Syncthing interface.
-- Under **More**, use **BAR ICON** to keep Syncthing's blue brand icon or tint
-  the bar icon to the current Omarchy theme.
+- Widget settings can tint the bar icon to the current Omarchy theme.
 
 ### Keyboard
 

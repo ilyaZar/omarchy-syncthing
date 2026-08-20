@@ -1,8 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Monochrome master: pure white on transparent. Recolored at runtime by
-     MonoIcon.qml, whose MultiEffect multiplies this file's value channel by
-     the tint, so white reproduces the tint exactly. Do not introduce grays or
-     colors here: any non-white pixel darkens the result. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
   <g id="syncthing-mark">
     <circle id="ring" cx="8.218058" cy="8.000000" r="5.9557071"

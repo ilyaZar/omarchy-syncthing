@@ -1,6 +1,6 @@
 # Syncthing status icons
 
-The four SVG files in `brand/` are formatting adaptations of Syncthing's
+The four SVG files in this directory are formatting adaptations of Syncthing's
 official 16-by-16 status icons. Their appearance and view boxes are preserved:
 
 - `status-default.svg`

@@ -1,12 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Monochrome master: pure white on transparent. Recolored at runtime by
-     MonoIcon.qml, whose MultiEffect multiplies this file's value channel by
-     the tint, so white reproduces the tint exactly. Do not introduce grays or
-     colors here: any non-white pixel darkens the result.
-     The badge keeps Syncthing's own construction: the mark is bitten away and
-     the status symbol is drawn as positive ink in the hole. Symbol geometry is
-     copied verbatim from the brand icons and only scaled about the badge
-     centre, so the strokes survive at bar size. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
   <defs>
     <mask id="bite" maskUnits="userSpaceOnUse" x="0" y="0" width="16" height="16">
