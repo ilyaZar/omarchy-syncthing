@@ -111,7 +111,7 @@ run_and_prompt() {
     fail "Another Syncthing operation is already running"
   fi
   printf '%s\n' "$$" >"$operation_file"
-  trap 'rm -f -- "$operation_file"' EXIT
+  trap '[[ ! -e $operation_file ]] || unlink -- "$operation_file"' EXIT
 
   printf 'Syncthing for Omarchy\n'
   printf '%s\n' '----------------------'
@@ -145,15 +145,19 @@ launch_terminal() {
     bash "$script_path" run "$action" "$@"
 }
 
-case "${1:-status}" in
-  status) detect_status ;;
-  install) launch_terminal install-package ;;
-  run)
-    shift
-    run_and_prompt "$@"
-    ;;
-  *)
-    fail "usage: ${0##*/} {status|install}"
-    exit 2
-    ;;
-esac
+main() {
+  case "${1:-status}" in
+    status) detect_status ;;
+    install) launch_terminal install-package ;;
+    run)
+      shift
+      run_and_prompt "$@"
+      ;;
+    *)
+      fail "usage: ${0##*/} {status|install}"
+      return 2
+      ;;
+  esac
+}
+
+main "$@"

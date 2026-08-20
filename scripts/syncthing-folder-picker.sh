@@ -1,13 +1,13 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-set -uo pipefail
+set -euo pipefail
 
 script_dir="$(dirname -- "$(realpath -- "${BASH_SOURCE[0]}")")"
 picker_qml="$script_dir/folder-picker.qml"
 picker_title="Choose a Syncthing folder"
 
 float_picker() {
-  local client address floating selector float_command place_command
+  local address attempt client float_command floating place_command selector
   local stable=0
 
   for ((attempt = 0; attempt < 100; attempt++)); do
@@ -42,23 +42,39 @@ float_picker() {
   done
 }
 
-float_picker &
-float_pid=$!
-output="$(
-  cd "$HOME" || exit 1
-  env -u QT_QPA_PLATFORMTHEME QT_FORCE_STDERR_LOGGING=1 \
-    qml6 -f "$picker_qml" 2>&1
-)"
-status=$?
-kill "$float_pid" 2>/dev/null || true
-wait "$float_pid" 2>/dev/null || true
+stop_floater() {
+  local pid="$1"
+  kill "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+}
 
-while IFS= read -r line; do
-  case "$line" in
-    *SYNCTHING_FOLDER=*)
-      printf '%s\n' "${line#*SYNCTHING_FOLDER=}"
-      ;;
-  esac
-done <<< "$output"
+print_selection() {
+  local line output="$1"
+  while IFS= read -r line; do
+    case "$line" in
+      *SYNCTHING_FOLDER=*)
+        printf '%s\n' "${line#*SYNCTHING_FOLDER=}"
+        ;;
+    esac
+  done <<< "$output"
+}
 
-exit "$status"
+main() {
+  local float_pid output status
+  float_picker &
+  float_pid=$!
+  if output="$(
+    cd "$HOME"
+    env -u QT_QPA_PLATFORMTHEME QT_FORCE_STDERR_LOGGING=1 \
+      qml6 -f "$picker_qml" 2>&1
+  )"; then
+    status=0
+  else
+    status=$?
+  fi
+  stop_floater "$float_pid"
+  print_selection "$output"
+  return "$status"
+}
+
+main "$@"
