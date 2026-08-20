@@ -122,12 +122,12 @@ function folderMeta(folder) {
     + formatBytes(folder.globalBytes) + suffix
 }
 
-function folderState(folder, recentlyLinkedFolderId) {
+function folderState(folder, recentlyLinkedFolderId, hasActivity) {
   if (!folder) return "UNKNOWN"
   if (folder.paused) return "UNLINKED"
   if (folder.problem) return "ERROR"
   if (recentlyLinkedFolderId === folder.id) return "LINKED"
-  if (folder.syncing || folder.scanning) return "SYNCING"
+  if (folder.syncing || folder.scanning || hasActivity) return "SYNCING"
   return "SYNCED"
 }
 
