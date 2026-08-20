@@ -51,7 +51,7 @@ QtObject {
     ? (_apiKey ? "Refreshing Syncthing state" : "Trying to find local API key")
       + [".", "..", "..."][_recoveryDotCount] : ""
   readonly property string syncActivityDots: syncingFiles.length > 0
-    ? [".", "..", "..."][_syncDotCount] : ""
+    ? [".  ", ".. ", "..."][_syncDotCount] : ""
   readonly property string syncActivityPath: syncingFiles.length > 0
     ? syncTokenParts(syncingFiles[_syncFileIndex % syncingFiles.length])[1] : ""
   readonly property string syncActivityFolderId: syncingFiles.length > 0
@@ -89,7 +89,6 @@ QtObject {
   property var _remoteSyncFiles: ({})
   property var _changeSyncFiles: []
   property var _changeSyncActions: ({})
-  property var _pendingSyncDeletes: []
   property int _syncDotCount: 0
   property int _syncFileIndex: 0
   property int _syncEventSince: 0
@@ -1114,34 +1113,10 @@ QtObject {
     rebuildSyncingFiles()
   }
 
-  function hasVisibleMoveTarget(folder, path) {
-    var name = displayFileName(path)
-    if (!name) return false
-    for (var i = 0; i < _changeSyncFiles.length; i++) {
-      var candidate = syncTokenParts(_changeSyncFiles[i])
-      if (candidate[0] === String(folder || "") && candidate[1] !== path
-          && displayFileName(candidate[1]) === name) return true
-    }
-    return false
-  }
-
-  function processOrDelaySyncChange(event) {
-    var data = (event || {}).data || ({})
-    if (String(data.action || "") === "deleted") {
-      var next = _pendingSyncDeletes.slice()
-      next.push(event)
-      _pendingSyncDeletes = next
-      syncDeleteDelayTimer.restart()
-    } else {
-      processSyncEvent(event)
-    }
-  }
-
-  function processPendingSyncDeletes() {
-    var events = _pendingSyncDeletes
-    _pendingSyncDeletes = []
-    for (var i = 0; i < events.length; i++) {
-      processSyncEvent(events[i])
+  function processIndexedChanges(folder, changes) {
+    for (var i = 0; i < changes.length; i++) {
+      noteSyncChange(folder, changes[i].path,
+        changes[i].deleted ? "removing" : "syncing")
     }
   }
 
@@ -1160,13 +1135,8 @@ QtObject {
         return
       }
       onFinished({
-        type: "LocalChangeDetected",
-        data: {
-          action: local.deleted === true ? "deleted" : "modified",
-          folder: folder,
-          path: path,
-          type: "file"
-        }
+        path: String(local.name || path),
+        deleted: local.deleted === true
       })
     }, function() {
       onFinished(null)
@@ -1208,9 +1178,7 @@ QtObject {
           root.scanIndexedDirectory(folder, directories[j])
         }
       }
-      for (var k = 0; k < changes.length; k++) {
-        root.processOrDelaySyncChange(changes[k])
-      }
+      root.processIndexedChanges(folder, changes)
     }
     for (var m = 0; m < names.length; m++) {
       inspectIndexedFile(folder, names[m], finish)
@@ -1220,9 +1188,7 @@ QtObject {
   function processSyncEvents(events) {
     for (var i = 0; i < events.length; i++) {
       var type = String((events[i] || {}).type || "")
-      if (type === "LocalChangeDetected" || type === "RemoteChangeDetected") {
-        processOrDelaySyncChange(events[i])
-      } else if (type === "LocalIndexUpdated") {
+      if (type === "LocalIndexUpdated") {
         processLocalIndexUpdate(events[i])
       } else {
         processSyncEvent(events[i])
@@ -1271,24 +1237,6 @@ QtObject {
       fetch("getPendingFolders", {}, function(pending) {
         root.pendingFolders = pending || ({})
       }, function() {}, false)
-    } else if (type === "LocalChangeDetected"
-        || type === "RemoteChangeDetected") {
-      if (!data.type || data.type === "file") {
-        var path = String(data.path || "")
-        var folder = String(data.folder || "")
-        var isDeleted = String(data.action || "") === "deleted"
-        if (isDeleted && hasVisibleMoveTarget(folder, path)) {
-          forgetSyncChange(folder, path)
-          return
-        }
-        var action = isDeleted ? "removing" : "syncing"
-        noteSyncChange(folder, path, action)
-      }
-    } else if (type === "ItemStarted" || type === "ItemFinished") {
-      if (!data.type || data.type === "file") {
-        noteSyncChange(data.folder, data.item,
-          String(data.action || "") === "delete" ? "removing" : "syncing")
-      }
     }
     rebuildSyncingFiles()
   }
@@ -1300,9 +1248,7 @@ QtObject {
     var generation = _syncEventGeneration
     var query = {
       events: "DownloadProgress,RemoteDownloadProgress,DeviceDisconnected,"
-        + "PendingFoldersChanged,"
-        + "LocalChangeDetected,RemoteChangeDetected,LocalIndexUpdated,"
-        + "ItemStarted,ItemFinished",
+        + "PendingFoldersChanged,LocalIndexUpdated",
       timeout: _syncEventsInitialized ? 5 : 0
     }
     if (_syncEventsInitialized) query.since = _syncEventSince
@@ -1347,8 +1293,6 @@ QtObject {
     _remoteSyncFiles = ({})
     _changeSyncFiles = []
     _changeSyncActions = ({})
-    _pendingSyncDeletes = []
-    syncDeleteDelayTimer.stop()
     syncChangeHoldTimer.stop()
     syncingFiles = []
     syncActions = ({})
@@ -1472,12 +1416,6 @@ QtObject {
       root._changeSyncActions = ({})
       root.rebuildSyncingFiles()
     }
-  }
-
-  property Timer syncDeleteDelayTimer: Timer {
-    interval: 1500
-    repeat: false
-    onTriggered: root.processPendingSyncDeletes()
   }
 
   property Process folderPathProcess: Process {
