@@ -89,6 +89,12 @@ Panel {
     ? syncthing.recoveryWarning : ""
   readonly property string visibleSyncActivity: syncthing
     ? syncthing.syncActivity : ""
+  readonly property string visibleSyncDots: syncthing
+    ? syncthing.syncActivityDots : ""
+  readonly property string visibleSyncAction: syncthing
+    ? syncthing.syncActivityAction : ""
+  readonly property string visibleSyncDetail: syncthing
+    ? syncthing.syncActivityDetail : ""
   readonly property string heroMeta: {
     if (!syncthing) return "Service unavailable"
     if (syncthing.installationState === "missing") {
@@ -120,6 +126,12 @@ Panel {
   function configureService() {
     if (!syncthing) return
     syncthing.setRefreshInterval(setting("refreshIntervalSec", 60))
+  }
+
+  function syncActivityColor(action) {
+    if (action === "removing") return urgent
+    if (action === "upload") return success
+    return syncthingBlue
   }
 
   function buildFolderRows() {
@@ -1654,14 +1666,50 @@ Panel {
       anchors.topMargin: Style.space(6)
       spacing: Style.space(1)
 
-      Text {
+      Row {
         width: parent.width
-        text: root.folderHasActivity(folderRow.folder)
-          ? root.visibleSyncActivity : " "
-        color: root.syncthingBlue
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.caption
-        elide: Text.ElideRight
+        height: activityLabel.implicitHeight
+        spacing: 0
+        readonly property bool active: root.folderHasActivity(folderRow.folder)
+
+        Text {
+          id: activityLabel
+          text: parent.active ? "File syncing" : " "
+          color: root.syncthingBlue
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
+        }
+
+        Item {
+          id: activityDotsSlot
+          width: activityDotsProbe.implicitWidth
+          height: activityDotsProbe.implicitHeight
+
+          Text {
+            text: parent.parent.active ? root.visibleSyncDots : ""
+            color: root.syncthingBlue
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+          }
+
+          Text {
+            id: activityDotsProbe
+            visible: false
+            text: "..."
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+          }
+        }
+
+        Text {
+          width: Math.max(0, parent.width - activityLabel.implicitWidth
+            - activityDotsSlot.width)
+          text: parent.active ? " " + root.visibleSyncDetail : ""
+          color: root.syncActivityColor(root.visibleSyncAction)
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
+          elide: Text.ElideRight
+        }
       }
 
       Text {
