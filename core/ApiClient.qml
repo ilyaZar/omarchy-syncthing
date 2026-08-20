@@ -1,6 +1,6 @@
 import QtQuick
 import Quickshell.Io
-import "SyncthingApi.js" as Api
+import "../models/SyncthingApi.js" as Api
 
 QtObject {
   id: root

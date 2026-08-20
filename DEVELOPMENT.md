@@ -19,7 +19,8 @@ Use these review thresholds:
 - Aim for functions no longer than 50 lines. A function over 75 lines must be
   split or justified by a clearer single flow.
 - Keep cyclomatic complexity at or below 20 and nesting at four levels or less.
-- Run `qmllint` over every QML and JavaScript file before committing.
+- Run `qmllint` over every QML and JavaScript file before committing, including
+  files under `core/`, `models/`, and `ui/`.
 
 The numeric thresholds use ESLint's maintained `max-lines`,
 `max-lines-per-function`, `complexity`, and `max-depth` rules as practical

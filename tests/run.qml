@@ -1,7 +1,7 @@
 import QtQuick
-import ".."
-import "../FolderModel.js" as FolderModel
-import "../PanelModel.js" as PanelModel
+import "../core"
+import "../models/FolderModel.js" as FolderModel
+import "../models/PanelModel.js" as PanelModel
 
 QtObject {
   id: root
