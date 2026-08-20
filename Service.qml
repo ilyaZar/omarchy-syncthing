@@ -30,6 +30,7 @@ QtObject {
   property string folderMutationAction: ""
   property string folderMutationError: ""
   property string folderMutationNotice: ""
+  property string recentlyLinkedFolderId: ""
   property bool folderPreparationBusy: false
   property string folderPreparationError: ""
   property string folderIdSuggestion: ""
@@ -62,15 +63,13 @@ QtObject {
       syncingFiles[_syncFileIndex % syncingFiles.length]] || "syncing") : ""
   readonly property string syncActivityDetail: {
     if (!syncActivityFileName) return ""
-    var folderSuffix = folders.length > 1
-      ? " - " + folderLabel(syncActivityFolderId) : ""
     if (syncActivityAction === "removing") {
-      return "Removing " + syncActivityFileName + folderSuffix
+      return "Removing " + syncActivityFileName
     }
     if (syncActivityAction === "upload") {
-      return "Upload " + syncActivityFileName + folderSuffix
+      return "Upload " + syncActivityFileName
     }
-    return syncActivityFileName + folderSuffix
+    return syncActivityFileName
   }
   readonly property string syncActivity: syncingFiles.length > 0
     ? "File syncing" + syncActivityDots + " " + syncActivityDetail : ""
@@ -154,15 +153,6 @@ QtObject {
     } catch (error) {
     }
     return ["", String(token || "")]
-  }
-
-  function folderLabel(folderId) {
-    for (var i = 0; i < folders.length; i++) {
-      if (String((folders[i] || {}).id || "") === String(folderId || "")) {
-        return String(folders[i].label || folders[i].id || "Folder")
-      }
-    }
-    return String(folderId || "Folder")
   }
 
   function countConnectedDevices() {
@@ -295,6 +285,8 @@ QtObject {
     folders = []
     pendingFolders = ({})
     folderStatuses = ({})
+    recentlyLinkedFolderId = ""
+    root.recentlyLinkedTimer.stop()
     localDeviceId = ""
     restartRequired = false
     stopSyncEvents()
@@ -543,6 +535,8 @@ QtObject {
         json: { paused: shouldPause }
       }, function() {
         if (linked) {
+          root.recentlyLinkedFolderId = folder.id
+          root.recentlyLinkedTimer.restart()
           root.finishFolderMutation(
             "Linked " + label + ". Syncthing resumed the folder with its "
             + "existing sharing configuration.")
@@ -1403,6 +1397,12 @@ QtObject {
     interval: 10400
     repeat: false
     onTriggered: root.folderMutationNotice = ""
+  }
+
+  property Timer recentlyLinkedTimer: Timer {
+    interval: 10000
+    repeat: false
+    onTriggered: root.recentlyLinkedFolderId = ""
   }
 
   property Timer recoveryDotTimer: Timer {
