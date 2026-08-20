@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "FolderModel.js" as FolderModel
+import "../models/FolderModel.js" as FolderModel
 
 QtObject {
   id: root

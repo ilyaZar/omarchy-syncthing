@@ -5,7 +5,8 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
-import "PanelModel.js" as PanelModel
+import "ui"
+import "models/PanelModel.js" as PanelModel
 
 Panel {
   id: root
