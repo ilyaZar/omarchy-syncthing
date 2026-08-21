@@ -23,8 +23,8 @@ jq empty manifest.json
 omarchy plugin validate .
 qmllint Panel.qml Service.qml core/*.qml models/*.js ui/*.qml \
   tests/run.qml scripts/folder-picker.qml
-for script in scripts/*.sh; do bash -n "$script"; done
-shellcheck scripts/*.sh
+bash -n scripts/*.sh tests/*.sh
+mise exec aqua:koalaman/shellcheck@0.11.0 -- shellcheck scripts/*.sh tests/*.sh
 qml6 --apptype core -f tests/run.qml
 bash tests/scripts.test.sh
 ```
