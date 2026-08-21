@@ -13,8 +13,11 @@ var Endpoints = {
   getPendingFolders: "/rest/cluster/pending/folders",
   getRandomString: "/rest/svc/random/string",
   getRestartRequired: "/rest/config/restart-required",
+  getGuiConfig: "/rest/config/gui",
   getSystemStatus: "/rest/system/status",
+  getSystemPaths: "/rest/system/paths",
   getEvents: "/rest/events",
+  patchGuiConfig: "/rest/config/gui",
   patchFolder: "/rest/config/folders/{id}",
   scanFolder: "/rest/db/scan"
 }

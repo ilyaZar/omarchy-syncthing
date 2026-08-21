@@ -27,6 +27,9 @@ Panel {
     Qt.resolvedUrl("scripts/syncthing-folder-picker.sh"))
   readonly property bool folderPickerRunning: folderPickerProcess.running
   property bool moreOpen: false
+  property bool settingsMenuOpen: false
+  property bool removalConfirmOpen: false
+  property int settingsSelectedIndex: 0
   property bool addOpen: false
   property bool addIdEdited: false
   property bool addLabelFromOffer: false
@@ -65,7 +68,10 @@ Panel {
     if (busy) return "sync"
     return "default"
   }
-  readonly property bool themedIcon: setting("themedIcon", false) === true
+  readonly property bool legacyThemedIcon:
+    setting("themedIcon", false) === true
+  readonly property bool themedIcon: syncthing
+    ? syncthing.iconStyle === "themed" : legacyThemedIcon
   readonly property url syncthingIconSource: Qt.resolvedUrl(
     "assets/status-" + iconVariant + ".svg")
   readonly property url themedIconSource: Qt.resolvedUrl(
@@ -84,10 +90,11 @@ Panel {
     if (!syncthing) return ""
     return syncthing.folderMutationError || syncthing.controlError
       || syncthing.packageError
+      || syncthing.settingsError
       || syncthing.lastError || ""
   }
   readonly property string visibleNotice: syncthing
-    ? syncthing.folderMutationNotice : ""
+    ? syncthing.folderMutationNotice || syncthing.settingsNotice : ""
   readonly property string visibleWarning: syncthing
     ? syncthing.recoveryWarning : ""
   readonly property string visibleSyncActivity: syncthing
@@ -129,6 +136,7 @@ Panel {
   function configureService() {
     if (!syncthing) return
     syncthing.setRefreshInterval(setting("refreshIntervalSec", 60))
+    syncthing.setLegacyThemedIcon(legacyThemedIcon)
   }
 
   function buildFolderRows() {
@@ -278,6 +286,8 @@ Panel {
 
   function resetTransientState() {
     moreOpen = false
+    settingsMenuOpen = false
+    removalConfirmOpen = false
     addOpen = false
     addIdEdited = false
     addLabelFromOffer = false
@@ -374,6 +384,44 @@ Panel {
     if (syncthing && syncthing.online) Qt.openUrlExternally(syncthing.baseUrl)
   }
 
+  function openSettingsMenu() {
+    closeTransientViews()
+    settingsSelectedIndex = 0
+    settingsMenuOpen = true
+  }
+
+  function closeSettingsMenu() {
+    removalConfirmOpen = false
+    settingsMenuOpen = false
+    popup.focusPanel()
+  }
+
+  function closeTransientViews() {
+    moreOpen = false
+    addOpen = false
+    forgetConfirmOpen = false
+    popup.closeTransientPopups()
+  }
+
+  function moveSettingsSelection(offset) {
+    settingsSelectedIndex = (settingsSelectedIndex
+      + (offset > 0 ? 1 : 2)) % 3
+  }
+
+  function activateSettingsSelection() {
+    if (settingsSelectedIndex === 0) {
+      settingsMenuOpen = false
+      if (syncthing) syncthing.openSettings()
+    } else if (settingsSelectedIndex === 1) {
+      removalConfirmOpen = true
+    } else closeSettingsMenu()
+  }
+
+  function requestSelfRemoval(deletePluginSettings) {
+    if (!syncthing) return
+    syncthing.requestSelfRemoval(deletePluginSettings)
+  }
+
   function openFolder(folder) {
     var path = resolveFolderPath(folder ? folder.path : "")
     if (!path) return
@@ -462,6 +510,10 @@ Panel {
       if (root.syncthing
           && root.syncthing.folderMutationNotice === expired) {
         root.syncthing.clearFolderMutationNotice()
+      }
+      if (root.syncthing
+          && root.syncthing.settingsNotice === expired) {
+        root.syncthing.clearSettingsNotice()
       }
     }
   }

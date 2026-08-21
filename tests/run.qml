@@ -2,6 +2,7 @@ import QtQuick
 import "../core"
 import "../models/FolderModel.js" as FolderModel
 import "../models/PanelModel.js" as PanelModel
+import "../models/SettingsModel.js" as SettingsModel
 
 QtObject {
   id: root
@@ -123,11 +124,44 @@ QtObject {
       ["local", "remote"], "configured devices")
   }
 
+  function testSettings() {
+    var parsed = SettingsModel.parse([
+      "# Syncthing plugin preferences",
+      "icon_style = \"themed\" # follows the Omarchy palette",
+      "web_ui_theme = 'default' # keep the Syncthing Web UI"
+    ].join("\n"))
+    compare(parsed, {
+      error: "",
+      iconStyle: "themed",
+      webUiTheme: "default"
+    }, "commented settings")
+    compare(SettingsModel.defaults(true), {
+      iconStyle: "themed",
+      webUiTheme: "omarchy"
+    }, "legacy themed icon migration")
+    compare(SettingsModel.defaults(false), {
+      iconStyle: "branded",
+      webUiTheme: "omarchy"
+    }, "implicit defaults")
+    compare(SettingsModel.parse([
+      "icon_style = \"branded\"",
+      "web_ui_theme = \"unknown\""
+    ].join("\n")).error,
+      "web_ui_theme must be default or omarchy", "invalid Web UI theme")
+    compare(SettingsModel.parse([
+      "icon_style = \"branded\"",
+      "icon_style = \"themed\"",
+      "web_ui_theme = \"omarchy\""
+    ].join("\n")).error,
+      "Duplicate setting icon_style on line 2", "duplicate setting")
+  }
+
   Component.onCompleted: {
     try {
       testActivityStates()
       testNestedIndexedState()
       testModels()
+      testSettings()
       console.log("all tests passed")
       Qt.exit(0)
     } catch (error) {

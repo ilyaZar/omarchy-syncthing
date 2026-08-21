@@ -23,16 +23,32 @@ starts `syncthing.service`.
 - Select **+** to configure an existing local directory.
 - Select **Refresh** to request an immediate health update.
 - Select **Open Web UI** for device setup and advanced folder options.
-- Enable the widget's themed-icon setting to tint the bar icon.
+- Select the gear or press `s` for appearance settings and clean removal.
 
 | Key   | Action                    |
 | ----- | ------------------------- |
 | `r`   | refresh status            |
 | `w`   | open the Web UI           |
 | `p`   | start or stop the service |
-| `m`   | show or hide More         |
+| `s`   | open plugin settings      |
 | `q`   | close the panel           |
 | `esc` | close the panel           |
+
+## Settings
+
+The settings menu opens
+`~/.config/omarchy/ilyazar.syncthing/settings.toml` in the default editor. The
+file is created only when it is first opened, and changes apply when saved.
+
+- `icon_style = "branded"` uses the classic Syncthing bar icon. Use `themed`
+  for an icon colored by the active Omarchy theme.
+- `web_ui_theme = "omarchy"` applies the complete Omarchy palette to
+  Syncthing's Web UI. Use `default` for Syncthing's own styling.
+
+Changing the Omarchy theme regenerates the Web UI palette immediately. Refresh
+an already-open browser page to load the new colors. The generated Omarchy
+theme is separate from Syncthing's default theme assets, so selecting `default`
+keeps Syncthing's styling and any user customization intact.
 
 ## Demo
 
@@ -87,12 +103,19 @@ and
 [folder guide](https://docs.syncthing.net/intro/gui.html)
 for device pairing and sharing.
 
-Folder management uses Syncthing's granular configuration API and requires
-Syncthing 1.12.0 or later.
+Folder management and Web UI theming use Syncthing's granular configuration
+and system-path APIs and require Syncthing 1.21.0 or later.
 
 ## Remove
 
-Remove an installation made through Omarchy manually:
+Open the plugin settings and select **Cleanly remove Syncthing plugin**. The
+confirmation can preserve or delete the plugin settings. Both choices restore
+Syncthing's default Web UI when the Omarchy theme is active, remove the
+generated Omarchy theme, and then use Omarchy's native plugin removal.
+
+Clean plugin removal never uninstalls Syncthing or removes its configuration,
+folders, devices, or synchronized data. Uninstall Syncthing separately only
+when that is intended:
 
 ```bash
 systemctl --user disable --now syncthing.service
@@ -100,15 +123,6 @@ omarchy pkg drop syncthing
 ```
 
 These commands do not remove Syncthing configuration or synchronized files.
-
-Remove the plugin separately:
-
-```bash
-omarchy plugin remove io.github.ilyazar.syncthing
-```
-
-Removing the plugin does not remove Syncthing or undo folder changes made
-through the plugin.
 
 ## Security and license
 

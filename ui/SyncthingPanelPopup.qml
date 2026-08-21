@@ -38,7 +38,8 @@ KeyboardPanel {
   focusTarget: keyCatcher
   contentWidth: fittedContentWidth(Style.space(380))
   contentHeight: fittedContentHeight(content.implicitHeight
-    + shortcutHint.implicitHeight + Style.space(12), Style.space(560))
+    + fixedActions.height + shortcutHint.implicitHeight
+    + Style.space(fixedActions.visible ? 24 : 12), Style.space(560))
 
   PanelKeyCatcher {
     id: keyCatcher
@@ -46,24 +47,43 @@ KeyboardPanel {
     blocked: root.controller.addOpen || folderOverview.popupOpen
       || moreDetails.folderPopupOpen || moreDetails.pendingPopupOpen
     onCloseRequested: {
-      if (root.controller.forgetConfirmOpen) {
+      if (root.controller.removalConfirmOpen) {
+        root.controller.removalConfirmOpen = false
+      } else if (root.controller.settingsMenuOpen) {
+        root.controller.closeSettingsMenu()
+      } else if (root.controller.forgetConfirmOpen) {
         root.controller.forgetConfirmOpen = false
         root.controller.forgetFolderId = ""
       } else if (root.controller.addOpen) root.controller.closeAddFolder()
       else root.controller.close()
     }
     onTabRequested: function(direction) {
-      root.controller.switchPanel(direction)
+      if (root.controller.removalConfirmOpen) {
+        removalDialog.selectedChoice = (removalDialog.selectedChoice
+          + (direction > 0 ? 1 : 2)) % 3
+      } else if (root.controller.settingsMenuOpen) {
+        root.controller.moveSettingsSelection(direction)
+      } else root.controller.switchPanel(direction)
     }
     onMoveRequested: function(dx, dy) {
-      if (root.controller.forgetConfirmOpen && (dx !== 0 || dy !== 0)) {
+      if (root.controller.removalConfirmOpen && dy !== 0) {
+        removalDialog.selectedChoice = (removalDialog.selectedChoice
+          + (dy > 0 ? 1 : 2)) % 3
+      } else if (root.controller.settingsMenuOpen && dy !== 0) {
+        root.controller.moveSettingsSelection(dy)
+      } else if (root.controller.forgetConfirmOpen
+          && (dx !== 0 || dy !== 0)) {
         forgetDialog.selectedIndex = forgetDialog.selectedIndex === 0 ? 1 : 0
       } else if (!root.controller.addOpen && dx !== 0) {
         root.controller.selectFolderOffset(dx)
       }
     }
-    onReturnRequested: {
-      if (root.controller.forgetConfirmOpen) {
+    onActivateRequested: {
+      if (root.controller.removalConfirmOpen) {
+        removalDialog.choose()
+      } else if (root.controller.settingsMenuOpen) {
+        root.controller.activateSettingsSelection()
+      } else if (root.controller.forgetConfirmOpen) {
         if (forgetDialog.selectedIndex === 0) {
           root.controller.forgetConfirmOpen = false
           root.controller.forgetFolderId = ""
@@ -71,15 +91,22 @@ KeyboardPanel {
       }
     }
     onTextKey: function(text) {
-      if (root.controller.forgetConfirmOpen) return
       var key = text.toLowerCase()
+      if (root.controller.removalConfirmOpen) {
+        if (key === "q") root.controller.removalConfirmOpen = false
+        return
+      }
+      if (root.controller.settingsMenuOpen) {
+        if (key === "q") root.controller.closeSettingsMenu()
+        return
+      }
+      if (root.controller.forgetConfirmOpen) return
       if (key === "r" && root.controller.syncthing) {
         root.controller.syncthing.refresh()
       } else if (key === "w") root.controller.openWebUi()
       else if (key === "p") root.controller.toggleSyncing()
-      else if (key === "m") {
-        root.controller.moreOpen = !root.controller.moreOpen
-      } else if (key === "q") root.controller.close()
+      else if (key === "s") root.controller.openSettingsMenu()
+      else if (key === "q") root.controller.close()
     }
   }
 
@@ -87,7 +114,7 @@ KeyboardPanel {
     id: panelFlick
     anchors.top: parent.top
     anchors.right: parent.right
-    anchors.bottom: shortcutHint.top
+    anchors.bottom: fixedActions.top
     anchors.bottomMargin: Style.space(12)
     anchors.left: parent.left
     contentWidth: width
@@ -104,6 +131,7 @@ KeyboardPanel {
       spacing: Style.space(12)
 
       PanelStatus {
+        visible: !root.controller.settingsMenuOpen
         controller: root.controller
         syncthing: root.controller.syncthing
         foreground: root.controller.foreground
@@ -114,10 +142,12 @@ KeyboardPanel {
       }
 
       PanelSeparator {
+        visible: !root.controller.settingsMenuOpen
         foreground: root.controller.foreground
       }
 
       Column {
+        visible: !root.controller.settingsMenuOpen
         width: parent.width
         spacing: Style.space(8)
 
@@ -154,38 +184,8 @@ KeyboardPanel {
         }
       }
 
-      PanelSeparator {
-        foreground: root.controller.foreground
-      }
-
-      Row {
-        spacing: Style.space(8)
-
-        Button {
-          text: root.controller.syncthing
-            && root.controller.syncthing.refreshing
-            ? "Refreshing…" : "Refresh"
-          bordered: true
-          foreground: root.controller.foreground
-          fontFamily: root.controller.fontFamily
-          enabled: root.controller.syncthing
-            && !root.controller.syncthing.refreshing
-            && !root.controller.syncthing.folderMutationBusy
-          onClicked: root.controller.syncthing.refresh()
-        }
-
-        Button {
-          text: "Open Web UI"
-          bordered: true
-          foreground: root.controller.foreground
-          fontFamily: root.controller.fontFamily
-          enabled: root.controller.syncthing !== null
-            && root.controller.syncthing.online
-          onClicked: root.controller.openWebUi()
-        }
-      }
-
       Button {
+        visible: !root.controller.settingsMenuOpen
         width: parent.width
         text: root.controller.moreOpen ? "Less" : "More"
         iconText: root.controller.moreOpen ? "\uf077" : "\uf078"
@@ -197,7 +197,7 @@ KeyboardPanel {
 
       MoreDetails {
         id: moreDetails
-        visible: root.controller.moreOpen
+        visible: !root.controller.settingsMenuOpen && root.controller.moreOpen
         controller: root.controller
         syncthing: root.controller.syncthing
         foreground: root.controller.foreground
@@ -206,6 +206,73 @@ KeyboardPanel {
         success: root.controller.success
         fontFamily: root.controller.fontFamily
       }
+
+      SettingsMenu {
+        visible: root.controller.settingsMenuOpen
+        width: parent.width
+        selectedIndex: root.controller.settingsSelectedIndex
+        fontFamily: root.controller.fontFamily
+        onActivated: function(index) {
+          root.controller.settingsSelectedIndex = index
+          root.controller.activateSettingsSelection()
+        }
+      }
+    }
+  }
+
+  Column {
+    id: fixedActions
+    visible: !root.controller.settingsMenuOpen
+    height: visible ? implicitHeight : 0
+    anchors.right: parent.right
+    anchors.bottom: shortcutHint.top
+    anchors.bottomMargin: Style.space(12)
+    anchors.left: parent.left
+    spacing: Style.space(12)
+
+    PanelSeparator {
+      foreground: root.controller.foreground
+    }
+
+    Row {
+      spacing: Style.space(8)
+
+      Button {
+        id: refreshButton
+        text: root.controller.syncthing
+          && root.controller.syncthing.refreshing
+          ? "Refreshing…" : "Refresh"
+        bordered: true
+        foreground: root.controller.foreground
+        fontFamily: root.controller.fontFamily
+        enabled: root.controller.syncthing
+          && !root.controller.syncthing.refreshing
+          && !root.controller.syncthing.folderMutationBusy
+        onClicked: root.controller.syncthing.refresh()
+      }
+
+      Button {
+        text: "Open Web UI"
+        bordered: true
+        foreground: root.controller.foreground
+        fontFamily: root.controller.fontFamily
+        enabled: root.controller.syncthing !== null
+          && root.controller.syncthing.online
+        onClicked: root.controller.openWebUi()
+      }
+
+      Button {
+        width: refreshButton.height
+        height: refreshButton.height
+        iconText: "\uf013"
+        iconSize: Style.font.body
+        tooltipText: "Settings"
+        bordered: true
+        foreground: root.controller.foreground
+        fontFamily: root.controller.fontFamily
+        enabled: root.controller.syncthing !== null
+        onClicked: root.controller.openSettingsMenu()
+      }
     }
   }
 
@@ -213,8 +280,9 @@ KeyboardPanel {
     id: shortcutHint
     anchors.left: parent.left
     anchors.bottom: parent.bottom
-    text: "REFRESH (r)  WEB UI (w)  START/STOP (p)  "
-      + (root.controller.moreOpen ? "LESS (m)" : "MORE (m)")
+    text: root.controller.settingsMenuOpen
+      ? "MOVE (j/k)  SELECT (enter)"
+      : "REFRESH (r)  WEB UI (w)  START/STOP (p)  SETTINGS (s)"
     color: root.controller.dim
     font.family: root.controller.fontFamily
     font.pixelSize: Style.font.caption
@@ -249,5 +317,19 @@ KeyboardPanel {
       root.controller.forgetFolderId = ""
     }
     onConfirmed: root.controller.confirmForget()
+  }
+
+  SelfRemovalDialog {
+    id: removalDialog
+    anchors.fill: parent
+    opened: root.controller.removalConfirmOpen
+    busy: root.controller.syncthing
+      ? root.controller.syncthing.settingsBusy : false
+    fontFamily: root.controller.fontFamily
+    z: 11
+    onCanceled: root.controller.removalConfirmOpen = false
+    onRemoveRequested: function(deletePluginSettings) {
+      root.controller.requestSelfRemoval(deletePluginSettings)
+    }
   }
 }
