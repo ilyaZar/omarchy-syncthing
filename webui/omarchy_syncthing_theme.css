@@ -3,9 +3,12 @@ body {
   background-color: {{background}} !important;
 }
 
-a,
-.text-primary {
+a {
   color: {{accent}};
+}
+
+.text-primary {
+  color: {{blue}};
 }
 
 a:hover,

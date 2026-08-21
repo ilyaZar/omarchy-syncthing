@@ -41,6 +41,7 @@ test_themes() {
   fi
 
   local user_theme="$test_root/user-theme/colors.toml"
+  local user_palette="$test_root/themes/user/syncthing-omarchy/assets/css/omarchy_syncthing_theme.css"
   mkdir -p -- "$(dirname -- "$user_theme")"
   printf '%s\n' \
     'background = "#120f18"' \
@@ -60,6 +61,11 @@ test_themes() {
     || fail "user theme did not inherit the Syncthing default theme"
   ! grep -R -q '{{' "$test_root/themes/user" \
     || fail "user theme left unresolved palette values"
+  for color in '#120f18' '#e8dff2' '#ff7ab2' '#ff5370' '#c3e88d' \
+      '#ffcb6b' '#82aaff' '#c792ea' '#89ddff'; do
+    grep -Fq "$color" "$user_palette" \
+      || fail "user theme omitted palette color $color"
+  done
 }
 
 install_fake_plugin() {
