@@ -23,7 +23,6 @@ QtObject {
   property var folderStatuses: ({})
   property string localDeviceId: ""
   readonly property var syncingFiles: activityTracker.syncingFiles
-  readonly property var syncActions: activityTracker.syncActions
 
   readonly property bool folderMutationBusy: folderController.mutationBusy
   readonly property string folderMutationId: folderController.mutationId
@@ -36,16 +35,11 @@ QtObject {
   readonly property string folderPreparationError:
     folderController.preparationError
   readonly property string folderIdSuggestion: folderController.idSuggestion
-  property bool restartRequired: false
 
   readonly property string installationState: installation.state
   readonly property string installationLabel: installation.label
   readonly property string executablePath: installation.executablePath
   readonly property bool serviceAvailable: installation.serviceAvailable
-  readonly property bool serviceRunning: installation.serviceRunning
-  readonly property bool operationRunning: installation.operationRunning
-  readonly property bool packageRefreshing: installation.refreshing
-  readonly property bool packageActionRunning: installation.packageActionRunning
   readonly property string packageStatus: installation.packageStatus
   readonly property string packageError: installation.packageError
   readonly property string controlError: installation.controlError
@@ -53,16 +47,11 @@ QtObject {
     ? (_apiKey ? "Refreshing Syncthing state" : "Trying to find local API key")
       + [".", "..", "..."][_recoveryDotCount] : ""
   readonly property string syncActivityDots: activityTracker.dots
-  readonly property string syncActivityPath: activityTracker.path
   readonly property string syncActivityFolderId: activityTracker.folderId
-  readonly property string syncActivityFileName: activityTracker.fileName
   readonly property string syncActivityAction: activityTracker.action
   readonly property string syncActivityDetail: activityTracker.detail
   readonly property string syncActivity: activityTracker.label
   readonly property string iconStyle: settings.iconStyle
-  readonly property string webUiTheme: settings.webUiTheme
-  readonly property string settingsPath: settings.settingsPath
-  readonly property bool settingsExists: settings.settingsExists
   readonly property bool settingsBusy: settings.busy
   readonly property string settingsError: settings.error
   readonly property string settingsNotice: settings.notice
@@ -86,7 +75,6 @@ QtObject {
   readonly property bool serviceActionRunning: installation.serviceActionRunning
   readonly property bool canUseRuntime: installation.canUseRuntime
   readonly property bool canControlService: installation.canControlService
-  readonly property bool lifecycleBusy: installation.lifecycleBusy
   readonly property bool canInstall: installation.canInstall
   readonly property int folderCount: folders.length
   readonly property int deviceCount: devices.length
@@ -275,9 +263,6 @@ QtObject {
     fetch("getPendingFolders", {}, function(data) {
       root.pendingFolders = data || ({})
     })
-    fetch("getRestartRequired", {}, function(data) {
-      root.restartRequired = !!((data || {}).requiresRestart)
-    })
     fetch("getFolders", {}, function(data) {
       root.folders = data instanceof Array ? data : []
       root.folderStatuses = ({})
@@ -301,7 +286,6 @@ QtObject {
     pendingFolders = ({})
     folderStatuses = ({})
     localDeviceId = ""
-    restartRequired = false
     activityTracker.stop()
     phase = nextPhase
     lastError = ""

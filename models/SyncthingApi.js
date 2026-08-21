@@ -12,7 +12,6 @@ var Endpoints = {
   getConnections: "/rest/system/connections",
   getPendingFolders: "/rest/cluster/pending/folders",
   getRandomString: "/rest/svc/random/string",
-  getRestartRequired: "/rest/config/restart-required",
   getGuiConfig: "/rest/config/gui",
   getSystemStatus: "/rest/system/status",
   getSystemPaths: "/rest/system/paths",
