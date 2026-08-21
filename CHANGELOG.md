@@ -4,6 +4,9 @@ Notable changes to Syncthing for Omarchy are documented here.
 
 ## Unreleased
 
+- Add file-based icon and theme preferences with live application.
+- Add an Omarchy-colored Syncthing Web UI and clean plugin removal.
+
 ## 0.1.5 - 2026-08-20
 
 - Add an optional theme-colored bar icon while keeping the Syncthing artwork

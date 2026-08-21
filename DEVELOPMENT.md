@@ -1,10 +1,14 @@
 # Development
 
-The root contains only the manifest and runtime entry points:
+Runtime code is grouped by responsibility:
 
-- `Panel.qml` coordinates the bar widget and imports visual types from `ui/`.
-- `Service.qml` coordinates local state and imports controllers from `core/`.
-- `models/` contains reusable JavaScript transformations.
+- Root `Panel.qml` and `Service.qml` are the runtime entry points.
+- `core/` contains stateful controllers and local API orchestration.
+- `ui/` contains panel views and dialogs.
+- `models/` contains pure JavaScript transformations.
+- `config/` and `webui/` contain shipped settings and theme templates.
+- `scripts/` contains bounded helpers for lifecycle and system integration.
+- `tests/` covers pure models plus helper behavior.
 
 Split a file when it owns unrelated behavior, not to meet an arbitrary line
 count.
@@ -22,6 +26,7 @@ qmllint Panel.qml Service.qml core/*.qml models/*.js ui/*.qml \
 for script in scripts/*.sh; do bash -n "$script"; done
 shellcheck scripts/*.sh
 qml6 --apptype core -f tests/run.qml
+bash tests/scripts.test.sh
 ```
 
 ## Syncthing state contract

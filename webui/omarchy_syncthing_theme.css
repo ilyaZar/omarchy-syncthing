@@ -1,0 +1,173 @@
+body {
+  color: {{foreground}} !important;
+  background-color: {{background}} !important;
+}
+
+a,
+.text-primary {
+  color: {{accent}};
+}
+
+a:hover,
+a:focus,
+.text-info {
+  color: {{cyan}};
+}
+
+.navbar,
+.panel-footer,
+.modal-footer,
+.dropdown-menu,
+.open > .dropdown-toggle {
+  color: {{foreground}} !important;
+  background-color: {{surface_dark}} !important;
+  border-color: {{muted}} !important;
+}
+
+.navbar-text,
+.navbar-link,
+.dropdown > a,
+.dropdown-menu > li > a,
+.hidden-xs > a {
+  color: {{foreground}} !important;
+}
+
+.dropdown-menu > li > a:hover,
+.dropdown-menu > li > a:focus,
+.nav-tabs > li > a:hover,
+.nav-tabs > li > a:focus,
+li.hidden-xs:hover,
+.navbar-link:hover,
+.navbar-link:focus {
+  color: {{foreground_light}} !important;
+  background-color: {{selection}} !important;
+}
+
+.dropdown-menu > .active > a,
+.nav-tabs > li.active > a,
+.nav-tabs > li.active > a:hover,
+.nav-tabs > li.active > a:focus {
+  color: {{foreground_light}} !important;
+  background-color: {{selection}} !important;
+  border-color: {{muted}} !important;
+}
+
+.divider,
+.nav-tabs,
+.panel-group .panel-heading + .panel-collapse > .panel-body,
+.panel-group .panel-heading + .panel-collapse > .list-group {
+  border-color: {{muted}} !important;
+  background-color: {{muted}} !important;
+}
+
+.panel,
+.modal-content,
+.popover {
+  color: {{foreground}} !important;
+  background-color: {{background}} !important;
+  border-color: {{muted}} !important;
+}
+
+.panel-default > .panel-heading,
+.modal-header:not(.alert),
+.well,
+.form-control,
+.form-control[readonly="readonly"],
+.checkbox[disabled] {
+  color: {{foreground}} !important;
+  background-color: {{surface}} !important;
+  border-color: {{muted}} !important;
+}
+
+.table-striped > tbody > tr:nth-of-type(odd),
+.fancytree-container tr:hover,
+.fancytree-focused {
+  background-color: {{surface_dark}} !important;
+}
+
+.help-block,
+.checkbox[disabled] *,
+.checkbox[disabled] .help-block {
+  color: {{foreground_dark}} !important;
+}
+
+.btn-default,
+.pagination > li > a,
+.pagination > li > span {
+  color: {{foreground}} !important;
+  background-color: {{surface}} !important;
+  border-color: {{muted}} !important;
+}
+
+.btn-default:hover,
+.btn-default:focus,
+.pagination > li > a:hover,
+.pagination > li > a:focus {
+  color: {{foreground_light}} !important;
+  background-color: {{selection}} !important;
+}
+
+.btn-primary,
+.panel-progress,
+.progress-bar {
+  background-color: {{accent}} !important;
+}
+
+.btn-success,
+.progress-bar-success {
+  background-color: {{green}} !important;
+}
+
+.btn-info,
+.progress-bar-info {
+  background-color: {{magenta}} !important;
+}
+
+.btn-warning,
+.progress-bar-warning {
+  background-color: {{yellow}} !important;
+}
+
+.btn-danger,
+.progress-bar-danger,
+.alert-danger {
+  background-color: {{red}} !important;
+}
+
+.alert-info {
+  color: {{background}} !important;
+  background-color: {{cyan}} !important;
+}
+
+.alert-warning,
+.panel-warning > .panel-heading {
+  color: {{background}} !important;
+  background-color: {{yellow}} !important;
+}
+
+.text-success {
+  color: {{green}} !important;
+}
+
+.text-warning {
+  color: {{orange}} !important;
+}
+
+.text-danger {
+  color: {{red}} !important;
+}
+
+code.ng-binding {
+  color: {{orange}} !important;
+  background-color: {{surface}} !important;
+}
+
+.identicon rect {
+  fill: {{foreground}};
+}
+
+.panel-warning .identicon rect,
+.progress .frontal {
+  fill: {{background}};
+  color: {{background}};
+}

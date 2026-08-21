@@ -59,6 +59,13 @@ QtObject {
   readonly property string syncActivityAction: activityTracker.action
   readonly property string syncActivityDetail: activityTracker.detail
   readonly property string syncActivity: activityTracker.label
+  readonly property string iconStyle: settings.iconStyle
+  readonly property string webUiTheme: settings.webUiTheme
+  readonly property string settingsPath: settings.settingsPath
+  readonly property bool settingsExists: settings.settingsExists
+  readonly property bool settingsBusy: settings.busy
+  readonly property string settingsError: settings.error
+  readonly property string settingsNotice: settings.notice
 
   property string _apiKey: ""
   property bool _useTls: false
@@ -142,6 +149,14 @@ QtObject {
     }
   }
 
+  property SettingsController settings: SettingsController {
+    apiReady: root._apiKey !== "" && root.canUseRuntime
+      && (!root.serviceAvailable || root.serviceActive)
+    requestApi: function(name, options, onSuccess, onError) {
+      return root.requestApi(name, options, onSuccess, onError)
+    }
+  }
+
   function localPath(url) {
     var value = String(url || "")
     if (value.indexOf("file://") === 0) value = value.slice(7)
@@ -203,6 +218,22 @@ QtObject {
     var value = parseInt(String(seconds), 10)
     if (!isFinite(value)) value = 60
     refreshIntervalSec = Math.max(60, Math.min(3600, value))
+  }
+
+  function setLegacyThemedIcon(enabled) {
+    settings.setLegacyThemedIcon(enabled)
+  }
+
+  function openSettings() {
+    settings.openSettings()
+  }
+
+  function clearSettingsNotice() {
+    settings.clearNotice()
+  }
+
+  function requestSelfRemoval(deletePluginSettings) {
+    settings.requestSelfRemoval(deletePluginSettings)
   }
 
   function refresh() {
