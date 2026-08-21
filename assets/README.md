@@ -11,7 +11,7 @@ official 16-by-16 status icons. Their appearance and view boxes are preserved:
 They were retrieved from the Syncthing repository at commit
 `058bcd7334839663cf569501d3ac539034d45cb5`:
 
-<https://github.com/syncthing/syncthing/tree/main/assets/statusicons>
+<https://github.com/syncthing/syncthing/tree/058bcd7334839663cf569501d3ac539034d45cb5/assets/statusicons>
 
 `mono/` holds monochrome redraws of the same four icons, tinted to the theme
 at runtime by `MonoIcon.qml`. They must stay pure white on transparent: the
